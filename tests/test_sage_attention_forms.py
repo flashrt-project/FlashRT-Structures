@@ -298,3 +298,87 @@ def test_adapter_default_prefers_nothing():
         DiffusersGatedRotaryAttentionAdapter)
 
     assert DiffusersGatedRotaryAttentionAdapter().prefer == ()
+
+
+# --------------------------------------------------------------------
+# the precision axis: a scheme names the forms, nothing else does
+# --------------------------------------------------------------------
+
+def test_default_schemes_name_no_attention_forms():
+    """Every existing profile must keep the published order.
+
+    This is the property that makes the new attribute safe to add: a host
+    that selected any scheme before this change gets exactly the ladder it
+    was measured against.
+    """
+    from flashrt_structures import schemes
+
+    for name in schemes.names():
+        if name == "nvfp4_balance_sage":
+            continue
+        scheme = schemes.get(name)
+        assert getattr(scheme, "attention_forms", ()) == (), name
+
+
+def test_the_quantized_profile_names_them():
+    from flashrt_structures import schemes
+
+    scheme = schemes.get("nvfp4_balance_sage")
+    assert scheme.attention_forms == ("sage2", "sage3")
+    assert scheme.name == "nvfp4_balance_sage"
+
+
+def test_adapter_takes_the_forms_from_the_scheme(monkeypatch):
+    from flashrt_structures import schemes
+    from flashrt_structures.adapters import (
+        DiffusersGatedRotaryAttentionAdapter)
+    import flashrt_structures.adapters.diffusers_gated_rotary_attention \
+        as adapter_module
+
+    seen = {}
+
+    def fake_bind(captures, *, prefer=()):
+        seen["prefer"] = prefer
+        return None
+
+    monkeypatch.setattr(adapter_module, "bind_dense_attention_best",
+                        fake_bind)
+    module = _attention_module(heads=2)
+    module.processor = _GatedRotaryProcessor()
+    model = torch.nn.Module()
+    model.attn = module
+
+    def forward():
+        module.processor(module, torch.zeros(1, 2, 4))
+
+    DiffusersGatedRotaryAttentionAdapter()(
+        model, forward, scheme=schemes.get("nvfp4_balance_sage"))
+    assert seen["prefer"] == ("sage2", "sage3")
+
+
+def test_a_scheme_without_forms_leaves_the_order_alone(monkeypatch):
+    from flashrt_structures import schemes
+    from flashrt_structures.adapters import (
+        DiffusersGatedRotaryAttentionAdapter)
+    import flashrt_structures.adapters.diffusers_gated_rotary_attention \
+        as adapter_module
+
+    seen = {}
+
+    def fake_bind(captures, *, prefer=()):
+        seen["prefer"] = prefer
+        return None
+
+    monkeypatch.setattr(adapter_module, "bind_dense_attention_best",
+                        fake_bind)
+    module = _attention_module(heads=2)
+    module.processor = _GatedRotaryProcessor()
+    model = torch.nn.Module()
+    model.attn = module
+
+    def forward():
+        module.processor(module, torch.zeros(1, 2, 4))
+
+    DiffusersGatedRotaryAttentionAdapter()(
+        model, forward, scheme=schemes.get("nvfp4_balance"))
+    assert seen["prefer"] == ()
