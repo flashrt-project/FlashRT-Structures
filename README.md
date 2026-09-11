@@ -50,6 +50,12 @@ pip install flashrt-structures            # pulls flash-rt (pure Python) for the
 pip install "flashrt-structures[hub]"     # + the kernel hub client, needed to bind
 ```
 
+`flash-rt` must be a version that ships the catalog as `flash_rt.catalog`:
+FlashRT `main` after the structures split, or a wheel newer than 0.1.0
+(the 0.1.0 wheel on PyPI predates the split and still carries the layer
+inside `flash_rt.structures`). An older flash-rt makes `import
+flashrt_structures` fail with a message that says exactly this.
+
 Bring your own torch. Which kernels exist is decided by the torch version:
 the hub's published face is thickest at `torch 2.11 / cu128` on x86-64 and
 much thinner at the newest release. If binds refuse on a fresh install,

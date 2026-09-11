@@ -7,13 +7,22 @@ structure catalog and its registry. Implementations, host adapters, and
 the qualification harness build on top of these specifications.
 """
 
-from flash_rt.catalog.binding import (
-    BindingSpec,
-    CoverageSegment,
-    list_bindings,
-    load_binding,
-)
-from flash_rt.catalog.registry import StructureSpec, list_structures, load
+try:
+    from flash_rt.catalog.binding import (
+        BindingSpec,
+        CoverageSegment,
+        list_bindings,
+        load_binding,
+    )
+    from flash_rt.catalog.registry import StructureSpec, list_structures, load
+except ImportError as _e:  # pragma: no cover - depends on the installed flash-rt
+    raise ImportError(
+        "flashrt-structures needs a flash-rt that ships the structure "
+        "catalog as flash_rt.catalog (FlashRT main after the structures "
+        "split; the 0.1.0 wheel on PyPI predates it and still carries the "
+        "layer as flash_rt.structures). Install FlashRT from "
+        "https://github.com/flashrt-project/FlashRT or upgrade flash-rt."
+    ) from _e
 
 
 def get(name):
