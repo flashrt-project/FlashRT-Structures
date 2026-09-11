@@ -8,8 +8,8 @@ runs, on a single RTX 5090, against the unmodified Hugging Face host.
 ```python
 import torch
 from transformers import AutoModelForImageTextToText, AutoProcessor
-from flash_rt import structures
-from flash_rt.structures.swap import attach
+import flashrt_structures as structures
+from flashrt_structures.swap import attach
 
 model = AutoModelForImageTextToText.from_pretrained(
     "Qwen/Qwen3-VL-8B-Instruct", dtype=torch.bfloat16).to("cuda").eval()
@@ -59,6 +59,6 @@ Three habits the receipts keep proving:
 - **Let refusals happen.** A seam kept at host precision or an adapter
   that steps aside is the system working; `explain` names every one.
 - **Keep the receipt.** Every gate can call
-  `flash_rt.structures.gates.save_record` — records carry an
+  `flashrt_structures.gates.save_record` — records carry an
   environment lock and verify with `verify_record`/`check_env`, so a
   number you measured today is a number you can defend later.

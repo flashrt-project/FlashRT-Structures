@@ -13,7 +13,7 @@ import types
 
 import pytest
 
-from flash_rt.structures import impls
+from flashrt_structures import impls
 
 
 def _fake_module(tmp_path, meta=None):

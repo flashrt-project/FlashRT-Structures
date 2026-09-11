@@ -5,9 +5,9 @@ from types import SimpleNamespace
 import torch
 from torch import nn
 
-from flash_rt.structures.adapters import packed_qkv_rope as adapter_mod
-from flash_rt.structures.catalog.qkv_rope.reference import qkv_rope_ref
-from flash_rt.structures.registry import load
+from flashrt_structures.adapters import packed_qkv_rope as adapter_mod
+from flash_rt.catalog.structures.qkv_rope.reference import qkv_rope_ref
+from flash_rt.catalog.registry import load
 
 
 def eager_attention_forward(

@@ -11,8 +11,8 @@ import json
 
 import pytest
 
-from flash_rt.structures import autobuild
-from flash_rt.structures.frontdoor import _environment
+from flashrt_structures import autobuild
+from flashrt_structures.frontdoor import _environment
 
 
 class _Seam:

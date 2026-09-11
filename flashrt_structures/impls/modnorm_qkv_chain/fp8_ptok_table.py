@@ -61,7 +61,7 @@ SUPPORT = {
 
 @lru_cache(maxsize=1)
 def _producer():
-    from flash_rt.structures.impls import hub_kernel
+    from flashrt_structures.impls import hub_kernel
 
     pkg = hub_kernel(PRODUCER_DEP["repo"], PRODUCER_DEP["version"])
     if not hasattr(pkg, "ada_layer_norm_quant_fp8_ptok_table_bf16"):
@@ -74,7 +74,7 @@ def _producer():
 
 @lru_cache(maxsize=1)
 def _ffn_kernel():
-    from flash_rt.structures.impls import hub_kernel
+    from flashrt_structures.impls import hub_kernel
 
     return hub_kernel(FFN_DEP["repo"], FFN_DEP["version"])
 
@@ -221,7 +221,7 @@ def bind_block_seam(model, seam, *, points):
     under the host attention, so attach/detach treats the whole
     composition as one transaction.
     """
-    from flash_rt.structures.discover import _resolve
+    from flashrt_structures.discover import _resolve
 
     block = _resolve(model, seam.path)
     table_param = block.scale_shift_table.detach()

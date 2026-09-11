@@ -44,7 +44,7 @@ Qualified on Python 3.10 / 3.11 / 3.12 / 3.13, Linux x86-64 and aarch64.
 ### The four lines
 
 ```python
-from flash_rt.structures.adapters import vllm_engine
+from flashrt_structures.adapters import vllm_engine
 vllm_engine.install_load_hook()
 
 from vllm import LLM
@@ -167,7 +167,7 @@ parent does not reach the process that owns the model. The door writes a
 `sitecustomize` onto `PYTHONPATH` instead, and the child picks it up:
 
 ```python
-from flash_rt.structures.adapters import sglang_engine
+from flashrt_structures.adapters import sglang_engine
 sglang_engine.install()
 
 import sglang as sgl
@@ -299,7 +299,7 @@ can catch it.
 Everything the process could not get is on the ledger:
 
 ```python
-from flash_rt.structures import impls
+from flashrt_structures import impls
 impls.unavailable_report()   # [{repo, version, error, detail}, ...]
 ```
 

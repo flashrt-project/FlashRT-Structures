@@ -16,7 +16,7 @@ import torch
 
 from transformers.feature_extraction_utils import BatchFeature
 
-from flash_rt.structures import capture as capture_stage
+from flashrt_structures import capture as capture_stage
 
 from full_graph import pin_action_noise, replay_ms
 from groot_n17 import build
@@ -35,10 +35,10 @@ def main() -> int:
 
     from lerobot.policies.groot.groot_n1_7 import GR00TN17
 
-    from flash_rt import structures
-    from flash_rt.structures import swap
-    from flash_rt.structures.impls import unavailable_report
-    from flash_rt.structures.impls.cadence_static.cross_attention import (
+    import flashrt_structures as structures
+    from flashrt_structures import swap
+    from flashrt_structures.impls import unavailable_report
+    from flashrt_structures.impls.cadence_static.cross_attention import (
         wire_refresh_to_producer)
 
     model = GR00TN17.from_pretrained(args.checkpoint).to(
@@ -83,7 +83,7 @@ def main() -> int:
                      "swaps": len(asm.swaps),
                      "refused": len(asm.refused)}
         else:
-            from flash_rt.structures.impls.cadence_static.cross_attention \
+            from flashrt_structures.impls.cadence_static.cross_attention \
                 import (bind_cross_attention_kv, capture_cross_attention_kv,
                         discover_cross_attention_kv)
             sites = discover_cross_attention_kv(model)

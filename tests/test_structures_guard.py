@@ -1,4 +1,4 @@
-"""Unit tests for flash_rt.structures.guard and .swap.
+"""Unit tests for flashrt_structures.guard and .swap.
 
 CPU-only, no kernels and no checkpoints: the subject is the mechanism a
 bound structure uses to answer for itself at runtime, which is testable
@@ -17,9 +17,9 @@ import pytest
 import torch
 from torch import nn
 
-from flash_rt.structures.guard import (
+from flashrt_structures.guard import (
     CAST_OK, PROCEED, SELF_DETACH_AFTER, GuardRefused, GuardedSeam)
-from flash_rt.structures.swap import attach
+from flashrt_structures.swap import attach
 
 
 class FakeFused(GuardedSeam, nn.Module):

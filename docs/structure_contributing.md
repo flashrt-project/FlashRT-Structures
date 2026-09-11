@@ -1,7 +1,7 @@
 # Contributing to the structures layer
 
 This is the contributor entry point and pull-request self-review standard for
-`flash_rt/structures/`. It applies to external and internal contributors. Its
+`flashrt_structures/`. It applies to external and internal contributors. Its
 goal is to keep additions portable across hosts, explicit about unsupported
 cases, and removable without changing the host model.
 

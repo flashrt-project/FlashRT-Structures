@@ -106,7 +106,7 @@ def _tables(seq, device):
 
 
 def _build(rows=32):
-    from flash_rt.structures.impls.qkv_pack import fp8_static
+    from flashrt_structures.impls.qkv_pack import fp8_static
     torch.manual_seed(0)
     host = Host().eval().cuda().to(torch.bfloat16)
     plan = types.SimpleNamespace(swaps={})
@@ -125,10 +125,10 @@ def _build(rows=32):
 @cuda
 def test_routed_stream_tracks_the_host():
     pytest.importorskip("safetensors")
-    from flash_rt.structures import workspace
-    from flash_rt.structures.adapters.packed_stream_qk_norm_rope import (
+    from flashrt_structures import workspace
+    from flashrt_structures.adapters.packed_stream_qk_norm_rope import (
         PackedStreamQkNormRopeAdapter)
-    from flash_rt.structures.swap import attach
+    from flashrt_structures.swap import attach
 
     workspace.clear()
     host, plan = _build()
@@ -164,10 +164,10 @@ def test_routed_stream_tracks_the_host():
 
 @cuda
 def test_norm_rope_stage_matches_torch_on_identical_input():
-    from flash_rt.structures import workspace
-    from flash_rt.structures.adapters.packed_stream_qk_norm_rope import (
+    from flashrt_structures import workspace
+    from flashrt_structures.adapters.packed_stream_qk_norm_rope import (
         PackedStreamQkNormRopeAdapter)
-    from flash_rt.structures.swap import attach
+    from flashrt_structures.swap import attach
 
     workspace.clear()
     host, plan = _build()
@@ -186,7 +186,7 @@ def test_norm_rope_stage_matches_torch_on_identical_input():
             pack = plan.swaps["attn0.to_q"]
             packed = pack.joint(x).reshape(1, seq, -1)
             bound = result["observed"]["attn0::per_head_qk_norm_rope"]
-            from flash_rt.structures.adapters import (
+            from flashrt_structures.adapters import (
                 packed_stream_qk_norm_rope as mod)
             # tables through the adapter's own remap: rebuild inline
             cos, sin = rope
@@ -242,10 +242,10 @@ def test_each_route_permutes_its_own_pack():
     permuted a stranger's weights (proven empirically) while every
     single-site check stayed above a loose floor and fifty stacked
     layers compounded to 0.71. Ownership is the invariant to pin."""
-    from flash_rt.structures import workspace
-    from flash_rt.structures.adapters.packed_stream_qk_norm_rope import (
+    from flashrt_structures import workspace
+    from flashrt_structures.adapters.packed_stream_qk_norm_rope import (
         PackedStreamQkNormRopeAdapter)
-    from flash_rt.structures.swap import attach
+    from flashrt_structures.swap import attach
 
     workspace.clear()
     host, plan = _build()

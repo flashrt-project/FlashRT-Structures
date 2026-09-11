@@ -11,8 +11,8 @@ contract surface that is checkable without a GPU.
 
 import pytest
 
-from flash_rt.structures import schemes
-from flash_rt.structures.schemes import (Bf16Structural, Decision, NoQuant, PointStat,
+from flashrt_structures import schemes
+from flashrt_structures.schemes import (Bf16Structural, Decision, NoQuant, PointStat,
                                          W4A16Decode, W8A16Decode,
                                          resolve_auto, validate_request)
 
@@ -136,7 +136,7 @@ def test_w8a16_linear_band_mirrors_the_kernel_qualification():
     # table (w8_auto_linear_supported in the package's binding); the
     # impl's predicate must agree with it, not rediscover it as
     # runtime errors
-    from flash_rt.structures.impls.linear_proj.w8a16_static import _qualified
+    from flashrt_structures.impls.linear_proj.w8a16_static import _qualified
 
     assert _qualified(1, 512, 1024)          # K <= 1024 always
     assert _qualified(4, 128, 1024)
@@ -152,7 +152,7 @@ def test_w8a16_linear_band_mirrors_the_kernel_qualification():
 def test_w8a16_linear_impl_contract_surface():
     import torch
 
-    from flash_rt.structures.impls.linear_proj import w8a16_static
+    from flashrt_structures.impls.linear_proj import w8a16_static
 
     assert w8a16_static.KERNEL_DEP["repo"] == "flashrt/weight-only-ffn"
     assert w8a16_static._check({"w": torch.zeros(1024, 4096)}) == (1024, 4096)
@@ -166,7 +166,7 @@ def test_w8a16_linear_impl_contract_surface():
 def test_bind_router_accepts_w8a16_linear_format():
     import inspect
 
-    from flash_rt.structures import autobuild
+    from flashrt_structures import autobuild
 
     src = inspect.getsource(autobuild._bind_auto)
     assert 'fmt == "w8a16_static"' in src
@@ -175,7 +175,7 @@ def test_bind_router_accepts_w8a16_linear_format():
 def test_w4a16_impl_contract_surface():
     import torch
 
-    from flash_rt.structures.impls.decoder_ffn import w4a16_static
+    from flashrt_structures.impls.decoder_ffn import w4a16_static
 
     # entry points name real exports of the pinned Hub package; the
     # activation map refuses what the kernel does not implement
@@ -203,7 +203,7 @@ def test_w4a16_band_mirrors_the_kernel_qualification():
     # the kernel's auto dispatch accepts M in [1,3] with a per-M floor
     # on total weight elements; the impl's band table must agree with
     # it, not rediscover it as runtime errors
-    from flash_rt.structures.impls.decoder_ffn.w4a16_static import (
+    from flashrt_structures.impls.decoder_ffn.w4a16_static import (
         _AUTO_FLOOR, _in_band)
 
     assert _AUTO_FLOOR == {1: 12 << 20, 2: 32 << 20, 3: 64 << 20}
@@ -220,7 +220,7 @@ def test_bind_router_accepts_w4a16_format():
     # formats; unknown names still fail loudly (pinned elsewhere)
     import inspect
 
-    from flash_rt.structures import autobuild
+    from flashrt_structures import autobuild
 
     src = inspect.getsource(autobuild._bind_auto)
     assert "w4a16_static" in src

@@ -27,7 +27,7 @@
 ## 1. What a structure is
 
 One model region, versioned, with four parts declared in
-`flash_rt/structures/catalog/<name>/structure.yaml`:
+`flash_rt/catalog/structures/<name>/structure.yaml`:
 
 | Part | What it fixes |
 |---|---|
@@ -160,7 +160,7 @@ vocabulary for it.** Concretely:
 | Concern | Where it comes from |
 |---|---|
 | what to observe | the spec's `calibration.points` |
-| where it is on this host | `flash_rt/structures/points.py` + discovery |
+| where it is on this host | `flashrt_structures/points.py` + discovery |
 | reduction across samples | `flash_rt.core.calibration.accumulate_amax` |
 | dispersion diagnostics | `summarize_amax_dispersion` / `format_summary` |
 | outlier-scale warning | `check_scale_ceiling` |
@@ -272,7 +272,7 @@ recognized tensor-controlled ``while`` to the catalog's canonical
 ``init -> K * step -> readout`` schedule when ``model=`` is supplied:
 
 ```python
-from flash_rt.structures import swap
+from flashrt_structures import swap
 
 plan = structures.auto_swaps(model, [calibration_0, calibration_1])
 handle = swap.attach(model, plan.swaps, on_guard_fail="raise")

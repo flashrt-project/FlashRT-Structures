@@ -117,12 +117,12 @@ class CapturedStage:
         The declared windows become the contract's boundary windows
         (name -> device pointer + bytes); ``ports`` reference them by
         name exactly as in
-        :func:`flash_rt.structures.provider.export_captured_runtime`.
+        :func:`flash_rt.runtime.provider.export_captured_runtime`.
         This is the absorption edge: a stage captured out of any torch
         host becomes a runtime the FlashRT serving mechanisms (Nexus
         tick, capsule snapshot/restore) consume like a whitebox one.
         """
-        from .provider import export_captured_runtime
+        from flash_rt.runtime.provider import export_captured_runtime
 
         window_map = {
             name: (t.data_ptr(), t.numel() * t.element_size())

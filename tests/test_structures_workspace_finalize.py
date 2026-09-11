@@ -8,8 +8,8 @@ held originals, and a finalized attachment must refuse to detach.
 import pytest
 import torch
 
-from flash_rt.structures import workspace
-from flash_rt.structures.swap import attach
+from flashrt_structures import workspace
+from flashrt_structures.swap import attach
 
 
 def test_same_shape_and_tag_share_one_buffer():

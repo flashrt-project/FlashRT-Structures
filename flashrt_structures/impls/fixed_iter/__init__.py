@@ -3,7 +3,7 @@
 The stage catalog describes iterative pipelines semantically.  This package
 is the executable bridge for hosts whose Python spelling is not graph-safe:
 host-family adapters expose the same ``init -> K * step -> readout`` schedule
-as a fixed callable that :func:`flash_rt.structures.capture` can compile and
+as a fixed callable that :func:`flashrt_structures.capture` can compile and
 capture without changing the host repository.
 """
 

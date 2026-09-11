@@ -1,9 +1,9 @@
 import torch
 from torch import nn
 
-from flash_rt.structures.autobuild import auto_swaps, _layer_of, _seam_key
-from flash_rt.structures.discover import discover, seam_weights
-from flash_rt.structures.swap import attach
+from flashrt_structures.autobuild import auto_swaps, _layer_of, _seam_key
+from flashrt_structures.discover import discover, seam_weights
+from flashrt_structures.swap import attach
 
 
 class _GatedMlp(nn.Module):

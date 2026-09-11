@@ -9,7 +9,7 @@ detection predicate, the loud refusals, and the impl's envelope.
 import pytest
 import torch
 
-from flash_rt.structures.prequantized import (AdoptionReport,
+from flashrt_structures.prequantized import (AdoptionReport,
                                               _is_ct_nvfp4_linear,
                                               adopt_prequantized)
 
@@ -44,7 +44,7 @@ def test_report_summary_shape():
 
 
 def test_nvfp4_impl_contract_surface():
-    from flash_rt.structures.impls.linear_proj import nvfp4_dynamic
+    from flashrt_structures.impls.linear_proj import nvfp4_dynamic
 
     assert nvfp4_dynamic.KERNEL_DEP["repo"] == "flashrt/fp4-gemm"
     assert nvfp4_dynamic._check({"w": torch.zeros(1024, 4096)}) == (
@@ -62,7 +62,7 @@ def test_nvfp4_impl_contract_surface():
 
 
 def test_nvfp4_activation_quantizer_prefers_direct_bf16_entry():
-    from flash_rt.structures.impls.linear_proj import nvfp4_dynamic
+    from flashrt_structures.impls.linear_proj import nvfp4_dynamic
 
     calls = []
 
@@ -84,7 +84,7 @@ def test_nvfp4_activation_quantizer_prefers_direct_bf16_entry():
 
 
 def test_nvfp4_activation_quantizer_retains_legacy_fallback():
-    from flash_rt.structures.impls.linear_proj import nvfp4_dynamic
+    from flashrt_structures.impls.linear_proj import nvfp4_dynamic
 
     calls = []
 
@@ -101,6 +101,6 @@ def test_nvfp4_activation_quantizer_retains_legacy_fallback():
 
 
 def test_adoption_is_exported_from_the_package_door():
-    from flash_rt import structures
+    import flashrt_structures as structures
 
     assert "adopt_prequantized" in structures.__all__

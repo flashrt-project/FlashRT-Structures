@@ -3,7 +3,7 @@ from __future__ import annotations
 import torch
 import torch.nn.functional as F
 
-from flash_rt.structures.adapters.diffusers_attention import (
+from flashrt_structures.adapters.diffusers_attention import (
     DiffusersAttentionAdapter,
 )
 
@@ -95,7 +95,7 @@ class BF16Core(Core):
 
 def test_diffusers_adapter_routes_and_restores(monkeypatch):
     monkeypatch.setattr(
-        "flash_rt.structures.adapters.diffusers_attention."
+        "flashrt_structures.adapters.diffusers_attention."
         "bind_dense_attention_best",
         lambda captures: Core(),
     )
@@ -119,7 +119,7 @@ def test_diffusers_adapter_routes_and_restores(monkeypatch):
 def test_diffusers_adapter_uses_host_instead_of_hidden_dtype_cast(monkeypatch):
     core = BF16Core()
     monkeypatch.setattr(
-        "flash_rt.structures.adapters.diffusers_attention."
+        "flashrt_structures.adapters.diffusers_attention."
         "bind_dense_attention_best",
         lambda captures: core,
     )
@@ -141,7 +141,7 @@ def test_diffusers_adapter_matches_capability_not_processor_class_name(
         pass
 
     monkeypatch.setattr(
-        "flash_rt.structures.adapters.diffusers_attention."
+        "flashrt_structures.adapters.diffusers_attention."
         "bind_dense_attention_best",
         lambda captures: Core(),
     )
@@ -156,7 +156,7 @@ def test_diffusers_adapter_matches_capability_not_processor_class_name(
 
 def test_diffusers_adapter_hands_masked_sites_to_the_family(monkeypatch):
     monkeypatch.setattr(
-        "flash_rt.structures.adapters.diffusers_attention."
+        "flashrt_structures.adapters.diffusers_attention."
         "bind_dense_attention_best",
         lambda captures: Core(),
     )

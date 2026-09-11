@@ -153,7 +153,7 @@ class AutoPlan:
 
 def _spec_points(seam) -> tuple[str, ...]:
     """The point names this seam's structure spec declares."""
-    from .registry import load
+    from flash_rt.catalog.registry import load
 
     try:
         calibration = load(seam.structure).calibration

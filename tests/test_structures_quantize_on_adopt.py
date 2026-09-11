@@ -9,9 +9,9 @@ from __future__ import annotations
 import pytest
 import torch
 
-from flash_rt.structures.impls.moe_experts.nvfp4_dynamic import (
+from flashrt_structures.impls.moe_experts.nvfp4_dynamic import (
     SUPPORT, check_experts)
-from flash_rt.structures.quantize_on_adopt import (
+from flashrt_structures.quantize_on_adopt import (
     _is_moe_expert_bank, quantize_on_adopt)
 
 
@@ -75,7 +75,7 @@ def test_bankless_model_is_a_named_refusal():
 def test_matrix_counts_only_passing_digest_receipts(tmp_path):
     import json
 
-    from flash_rt.structures.matrix import generate
+    from flashrt_structures.matrix import generate
 
     def rec(name, host, chain, verdict="PASS", digest=True):
         d = {"gate": name, "host": host, "chain": chain,

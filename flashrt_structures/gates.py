@@ -22,7 +22,8 @@ from typing import Any, Callable, Mapping
 
 import torch
 
-from flash_rt.structures.registry import StructureSpec, _CATALOG_DIR
+from flash_rt.catalog.registry import StructureSpec, _CATALOG_DIR
+from flash_rt.core.parity import parity_metrics as _parity_metrics
 
 
 @dataclass(frozen=True)
@@ -281,26 +282,6 @@ def band_note(metrics: Mapping[str, float], kind: str,
             f"from {calibration.get('samples')} sample(s), "
             f"{calibration.get('method')}")
     return ", ".join(parts)
-
-
-def _parity_metrics(got: torch.Tensor, want: torch.Tensor) -> dict[str, float]:
-    if got.shape != want.shape:
-        raise ValueError(
-            f"output shape mismatch: impl {tuple(got.shape)} vs "
-            f"reference {tuple(want.shape)}"
-        )
-    diff = (got.double() - want.double()).abs().flatten()
-    cosine = torch.nn.functional.cosine_similarity(
-        got.double().flatten(), want.double().flatten(), dim=0
-    )
-    # kthvalue instead of quantile: exact and free of quantile's input
-    # size limit (qualification outputs can exceed it, e.g. LLM logits)
-    k = max(1, int(0.99 * diff.numel()))
-    return {
-        "cosine": float(cosine),
-        "max_abs": float(diff.max()),
-        "p99_abs": float(diff.kthvalue(k).values),
-    }
 
 
 def _spec_digest(spec: StructureSpec) -> str:

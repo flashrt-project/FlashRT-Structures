@@ -7,7 +7,7 @@ import unittest
 
 import torch
 
-from flash_rt.structures.impls.qkv_pack.fp8_static import bind_qkv_pack
+from flashrt_structures.impls.qkv_pack.fp8_static import bind_qkv_pack
 
 
 @unittest.skipUnless(

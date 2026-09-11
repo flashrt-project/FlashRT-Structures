@@ -8,7 +8,7 @@ staging; this layer refuses partial application by construction.
 
 The handle is also where the attachment answers for itself at runtime.
 Every swapped-in structure carries a guard recording the form it was
-calibrated for (:mod:`flash_rt.structures.guard`); attaching gives each
+calibrated for (:mod:`flashrt_structures.guard`); attaching gives each
 guard its path and a way to restore the host module, and
 ``handle.report()`` reads them back. An attachment whose report shows
 fallbacks is one that is not running the structures it claims to — that

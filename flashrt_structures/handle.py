@@ -25,7 +25,7 @@ import torch
 
 from .discover import _VISION_PROJ, activation_for
 from .gates import parity_metrics
-from .registry import StructureSpec, load
+from flash_rt.catalog.registry import StructureSpec, load
 
 
 class GateRefused(RuntimeError):

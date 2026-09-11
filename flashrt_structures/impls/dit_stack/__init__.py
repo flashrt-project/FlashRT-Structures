@@ -7,5 +7,5 @@ form is a launch chain: norms emit FP4 directly, residuals ride the
 GEMM epilogues, the per-step modulators come from a bind-time table.
 On a device without those symbols the seat-by-seat composition is the
 form, and nothing here activates. The choice is a receipt
-(:mod:`flash_rt.structures.regions`), never a device branch.
+(:mod:`flashrt_structures.regions`), never a device branch.
 """

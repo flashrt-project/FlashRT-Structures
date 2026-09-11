@@ -3,13 +3,13 @@ from __future__ import annotations
 import torch
 from torch import nn
 
-from flash_rt.structures.adapters.transformers_gated_delta import (
+from flashrt_structures.adapters.transformers_gated_delta import (
     TransformersGatedDeltaAdapter,
 )
-from flash_rt.structures.catalog.gated_delta_core.reference import (
+from flash_rt.catalog.structures.gated_delta_core.reference import (
     gated_delta_core_ref,
 )
-from flash_rt.structures.registry import load
+from flash_rt.catalog.registry import load
 
 
 def test_gated_delta_reference_carries_state_across_calls():
@@ -136,7 +136,7 @@ def test_hub_v3_binds_the_log_decay_dtype_the_host_exposes(monkeypatch):
     # predate the FP32 entry, and hold the bound dtype at call time
     import torch
 
-    from flash_rt.structures.impls.gated_delta_core import hub_v3
+    from flashrt_structures.impls.gated_delta_core import hub_v3
 
     calls = {}
 
@@ -176,7 +176,7 @@ def test_hub_v3_refuses_builds_without_the_fp32_entry(monkeypatch):
     import torch
     import pytest as _pytest
 
-    from flash_rt.structures.impls.gated_delta_core import hub_v3
+    from flashrt_structures.impls.gated_delta_core import hub_v3
 
     class _OldOps:
         def gated_delta_recurrent_inout_bf16(self, *a, **kw):
@@ -196,9 +196,9 @@ def test_fused_adapter_recognises_by_shape_and_ladders_cleanly(monkeypatch):
     import pytest as _pytest
     from torch import nn
 
-    from flash_rt.structures.adapters.transformers_gated_delta_fused import (
+    from flashrt_structures.adapters.transformers_gated_delta_fused import (
         TransformersGatedDeltaFusedAdapter, _fusable, _layer_index)
-    from flash_rt.structures.impls.gated_delta_core import fused_layer
+    from flashrt_structures.impls.gated_delta_core import fused_layer
 
     class _Gdn(nn.Module):
         def __init__(self, profile=True):
@@ -240,7 +240,7 @@ def test_fused_adapter_recognises_by_shape_and_ladders_cleanly(monkeypatch):
 
     fused_layer._packages.cache_clear()
     monkeypatch.setattr(
-        "flash_rt.structures.impls.hub_kernel",
+        "flashrt_structures.impls.hub_kernel",
         lambda repo, ver: _OldPkg())
     with _pytest.raises(ValueError, match="lacks"):
         TransformersGatedDeltaFusedAdapter()(_Model(), lambda: None)
@@ -248,8 +248,8 @@ def test_fused_adapter_recognises_by_shape_and_ladders_cleanly(monkeypatch):
 
 
 def test_w4a4_scheme_routes_the_gdn_projection_band():
-    from flash_rt.structures import schemes
-    from flash_rt.structures.adapters.transformers_gated_delta_fused \
+    from flashrt_structures import schemes
+    from flashrt_structures.adapters.transformers_gated_delta_fused \
         import TransformersGatedDeltaFusedAdapter
 
     assert schemes.QuantScheme.gdn_projection_format is None

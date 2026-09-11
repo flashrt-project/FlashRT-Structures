@@ -5,8 +5,8 @@ from types import SimpleNamespace
 import torch
 from torch import nn
 
-from flash_rt.structures.adapters import qwen_per_head_qk_norm_rope as adapter_mod
-from flash_rt.structures.impls.qkv_pack import fp8_static
+from flashrt_structures.adapters import qwen_per_head_qk_norm_rope as adapter_mod
+from flashrt_structures.impls.qkv_pack import fp8_static
 
 
 def eager_attention_forward(

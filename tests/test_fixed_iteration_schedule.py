@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 import torch
 
-from flash_rt.structures.impls.fixed_iter import (
+from flashrt_structures.impls.fixed_iter import (
     FixedIterationRefused,
     normalize_fixed_iteration,
 )

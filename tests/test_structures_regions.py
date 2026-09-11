@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import pytest
 
-from flash_rt.structures import decisions, regions
+from flashrt_structures import decisions, regions
 
 
 FAMILY = "dit_block"

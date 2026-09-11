@@ -16,7 +16,7 @@ KERNEL_DEP = {
 
 
 def _kernel():
-    from flash_rt.structures.impls import hub_kernel
+    from flashrt_structures.impls import hub_kernel
 
     return hub_kernel(KERNEL_DEP["repo"], KERNEL_DEP["version"])
 

@@ -25,12 +25,12 @@ def _mods():
     install-smoke purge makes collection-time references stale)."""
     return SimpleNamespace(
         autobuild=importlib.import_module(
-            "flash_rt.structures.autobuild"),
-        regions=importlib.import_module("flash_rt.structures.regions"),
+            "flashrt_structures.autobuild"),
+        regions=importlib.import_module("flashrt_structures.regions"),
         fp8_chain=importlib.import_module(
-            "flash_rt.structures.impls.adarms_stack.fp8_chain"),
+            "flashrt_structures.impls.adarms_stack.fp8_chain"),
         adarms_region=importlib.import_module(
-            "flash_rt.structures.impls.adarms_stack.region"))
+            "flashrt_structures.impls.adarms_stack.region"))
 
 
 DIM, HEADS, KV_HEADS, HEAD_DIM, COND = 64, 4, 1, 16, 32

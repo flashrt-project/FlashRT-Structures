@@ -4,16 +4,16 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from flash_rt.structures.catalog.patch_projection.reference import (
+from flash_rt.catalog.structures.patch_projection.reference import (
     patch_projection_ref,
 )
-from flash_rt.structures.discover import discover, seam_weights
-from flash_rt.structures.autobuild import auto_swaps
-from flash_rt.structures.impls.patch_projection.bf16_flat import (
+from flashrt_structures.discover import discover, seam_weights
+from flashrt_structures.autobuild import auto_swaps
+from flashrt_structures.impls.patch_projection.bf16_flat import (
     FlatPatchProjection,
     bind_flat_patch_projection,
 )
-from flash_rt.structures.swap import attach
+from flashrt_structures.swap import attach
 
 
 class FullPatchHost(nn.Module):

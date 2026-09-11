@@ -15,9 +15,9 @@ import pytest
 import torch
 from torch import nn
 
-from flash_rt.structures.guard import CAST_OK, PROCEED, GuardedSeam
-from flash_rt.structures.storage import WeightStore
-from flash_rt.structures.swap import attach
+from flashrt_structures.guard import CAST_OK, PROCEED, GuardedSeam
+from flashrt_structures.storage import WeightStore
+from flashrt_structures.swap import attach
 
 
 class FakeSeam(GuardedSeam, nn.Module):
@@ -138,7 +138,7 @@ def test_mutated_weight_falls_to_ram_tier(tmp_path):
 
 
 def test_decision_import_merges_and_local_wins(tmp_path, monkeypatch):
-    from flash_rt.structures import decisions
+    from flashrt_structures import decisions
 
     monkeypatch.setenv("FRT_DECISION_CACHE", str(tmp_path / "local.json"))
     decisions.record("groot_dit", "fp8", {"fp8": 1.0})

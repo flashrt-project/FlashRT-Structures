@@ -18,7 +18,7 @@ like. Follow it literally. When unsure, stop and ask; do not guess.
 | `docs/calibration.md` | The house calibration standard (statistics, two-level reduction, diagnostics). You must not invent a second one |
 | `catalog/*/structure.yaml` + `reference.py` | Worked precedents; copy the format of `decoder_ffn` |
 
-Code landmarks under `flash_rt/structures/`: `catalog/` (spec +
+Code landmarks under `flashrt_structures/`: `catalog/` (spec +
 reference), `bindings/` (per-host addressing receipts), `impls/`
 (executable forms), `discover.py` (structural discovery),
 `autobuild.py` (assembly), `points.py` (calibration collection),

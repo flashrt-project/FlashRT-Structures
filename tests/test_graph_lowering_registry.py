@@ -11,14 +11,14 @@ from __future__ import annotations
 import pytest
 import torch
 
-from flash_rt.structures.impls.graph_lowering import protocol
+from flashrt_structures.impls.graph_lowering import protocol
 
 
 def test_unrecognized_host_is_captured_as_is():
     # no family recognizing a model is not a fallback: the host may
     # simply be graph-safe already
     model = torch.nn.Linear(4, 4)
-    from flash_rt.structures.impls.graph_lowering.qwen3_vl import (
+    from flashrt_structures.impls.graph_lowering.qwen3_vl import (
         Qwen3VLGraphLoweringAdapter)
 
     assert Qwen3VLGraphLoweringAdapter().lower(model, lambda: None) is None
@@ -53,7 +53,7 @@ def test_capture_records_the_family_and_stage_can_restore(monkeypatch):
         undo=lambda: calls.append("undo"), family="fake", pins=("a", "b"),
         details={"tokens": 7})
 
-    from flash_rt.structures.stages import CapturedStage
+    from flashrt_structures.stages import CapturedStage
 
     stage = CapturedStage(graph=None, stream=None, output=None,
                           windows={}, lowerings=(lowering,))

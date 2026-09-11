@@ -80,9 +80,9 @@ def main() -> int:
     }
 
     if args.arm == "auto":
-        from flash_rt import structures
-        from flash_rt.structures import swap
-        from flash_rt.structures.impls import unavailable_report
+        import flashrt_structures as structures
+        from flashrt_structures import swap
+        from flashrt_structures.impls import unavailable_report
 
         def run_once():
             with torch.inference_mode():

@@ -65,7 +65,7 @@ bound"; they are "this shape, declined for this reason".
 
 ```python
 handle.notes["refused"]                       # (site, reason) per seat
-from flash_rt.structures import impls
+from flashrt_structures import impls
 impls.unavailable_report()                    # per kernel package
 ```
 
@@ -133,7 +133,7 @@ Three things shape whether you see numbers like these:
 Nothing here needs a benchmark harness to check:
 
 ```python
-import flash_rt.structures as S
+import flashrt_structures as S
 S.list_structures()          # the catalog this install carries
 plan = S.auto_swaps(model, forward)
 print(S.explain(plan))       # what would be claimed, and every refusal

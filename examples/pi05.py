@@ -56,11 +56,11 @@ SEAT_BOOK = {
 }
 
 REGION_IMPLS = {
-    "adarms_stack": ("flash_rt.structures.impls.adarms_stack.fp8_chain",
+    "adarms_stack": ("flashrt_structures.impls.adarms_stack.fp8_chain",
                      "bind_adarms_fp8_chain"),
-    "prefill_tower": ("flash_rt.structures.impls.prefill_tower.fp8_chain",
+    "prefill_tower": ("flashrt_structures.impls.prefill_tower.fp8_chain",
                       "bind_prefill_fp8_chain"),
-    "vision_tower": ("flash_rt.structures.impls.vision_tower.fp8_chain",
+    "vision_tower": ("flashrt_structures.impls.vision_tower.fp8_chain",
                      "bind_vision_fp8_chain"),
 }
 
@@ -263,8 +263,8 @@ def build(policy, hot):
     """Bind the explicit seat book; returns (handles, notes, undo)."""
     import importlib
 
-    from flash_rt.structures import autobuild
-    from flash_rt.structures.impls.graph_lowering.pi052_denoise import (
+    from flashrt_structures import autobuild
+    from flashrt_structures.impls.graph_lowering.pi052_denoise import (
         Pi05DenoiseGraphLoweringAdapter)
 
     model = policy.model
@@ -326,7 +326,7 @@ def build(policy, hot):
     # whatever tower a refused ladder left seated). Regions are pinned
     # seated for this pass so the scan never double-binds a tower the
     # book already owns, and seams under a bound root are dropped.
-    from flash_rt.structures import auto_swaps, swap
+    from flashrt_structures import auto_swaps, swap
     for family in SEAT_BOOK:
         os.environ["FRT_REGION_" + family.upper()] = "seated"
     roots_bound = [r["root"] for r in notes["regions_bound"]]
@@ -352,7 +352,7 @@ def build(policy, hot):
 
 
 def main():
-    from flash_rt import structures
+    import flashrt_structures as structures
 
     torch.manual_seed(0)
     policy = load_host()

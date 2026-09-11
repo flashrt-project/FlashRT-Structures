@@ -78,7 +78,7 @@ SUPPORT = {
 
 @lru_cache(maxsize=1)
 def _kernel():
-    from flash_rt.structures.impls import hub_kernel
+    from flashrt_structures.impls import hub_kernel
 
     return hub_kernel(KERNEL_DEP["repo"], KERNEL_DEP["version"])
 
@@ -90,7 +90,7 @@ def _quant_kernel():
     Its absence is not an error: the form simply does not qualify and
     the projection falls back to the bias form's floor.
     """
-    from flash_rt.structures.impls import hub_kernel
+    from flashrt_structures.impls import hub_kernel
 
     try:
         return hub_kernel(QUANT_DEP["repo"], QUANT_DEP["version"])

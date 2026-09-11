@@ -106,7 +106,7 @@ class Assembly:
 
     def take(self, path: str, family: str, build):
         """Run one seat's binder; a refusal is recorded, never raised."""
-        from flash_rt.structures.impls import KernelUnavailable
+        from flashrt_structures.impls import KernelUnavailable
 
         try:
             bound = build()
@@ -133,7 +133,7 @@ def _dit_band() -> str:
     pin = os.environ.get("FRT_DIT_BAND")
     if pin:
         return pin
-    from flash_rt.structures.decisions import lookup
+    from flashrt_structures.decisions import lookup
     return lookup("groot_dit", default="fp8")
 
 
@@ -143,17 +143,17 @@ def build(model, run_once) -> tuple[Assembly, dict]:
     ``run_once`` executes the model's hot path a single time; every
     calibration hook below records from that same pass.
     """
-    from flash_rt.structures.adapters.diffusers_attention import (
+    from flashrt_structures.adapters.diffusers_attention import (
         DiffusersAttentionAdapter)
-    from flash_rt.structures.discover import Seam, seam_weights
-    from flash_rt.structures.impls.adaln_producer.fused import (
+    from flashrt_structures.discover import Seam, seam_weights
+    from flashrt_structures.impls.adaln_producer.fused import (
         bind_adaln_producer)
-    from flash_rt.structures.impls.cadence_static.cross_attention import (
+    from flashrt_structures.impls.cadence_static.cross_attention import (
         bind_cross_attention_kv, capture_cross_attention_kv,
         discover_cross_attention_kv)
-    from flash_rt.structures.impls.decoder_ffn import fp8_static as dec_ffn
-    from flash_rt.structures.impls.qkv_pack.fp8_static import bind_qkv_pack
-    from flash_rt.structures.impls.vision_ffn import fp8_static as vis_ffn
+    from flashrt_structures.impls.decoder_ffn import fp8_static as dec_ffn
+    from flashrt_structures.impls.qkv_pack.fp8_static import bind_qkv_pack
+    from flashrt_structures.impls.vision_ffn import fp8_static as vis_ffn
 
     asm = Assembly()
     reverts = []
@@ -169,7 +169,7 @@ def build(model, run_once) -> tuple[Assembly, dict]:
     # into a closure (the per-head rope route below, the capture
     # lowering's vision pin), or the traffic has already left through
     # the old interface.
-    from flash_rt.structures.adapters.transformers_attention_interface \
+    from flashrt_structures.adapters.transformers_attention_interface \
         import TransformersAttentionInterfaceAdapter
     try:
         iface = TransformersAttentionInterfaceAdapter()(model)
@@ -316,9 +316,9 @@ def build(model, run_once) -> tuple[Assembly, dict]:
     # exactly as before. Cross ``to_k``/``to_v`` stay call-time resolved,
     # so the cadence banks bound at the end of this build still serve
     # the chain's encoder reads.
-    from flash_rt.structures.impls import KernelUnavailable as _KU
-    from flash_rt.structures.impls.dit_stack import region as dit_region
-    from flash_rt.structures.impls.dit_stack.fp4_chain import (
+    from flashrt_structures.impls import KernelUnavailable as _KU
+    from flashrt_structures.impls.dit_stack import region as dit_region
+    from flashrt_structures.impls.dit_stack.fp4_chain import (
         bind_dit_fp4_chain)
     chain_root = None
     for root in dit_region.identify(model):
@@ -356,7 +356,7 @@ def build(model, run_once) -> tuple[Assembly, dict]:
         if bound is not None:
             asm.place(path, bound)
 
-    from flash_rt.structures.impls.vision_ffn import (
+    from flashrt_structures.impls.vision_ffn import (
         nvfp4_balance as vis_w4)
     for path, mlp in {**DIT_FF, **VLSA_FF}.items():
         c = cal[path]
@@ -421,7 +421,7 @@ def build(model, run_once) -> tuple[Assembly, dict]:
     # and flipped only where the measured pair is faster (house rule).
     import dataclasses as _dc
 
-    from flash_rt.structures.impls.norm_fused.fp8_producer import (
+    from flashrt_structures.impls.norm_fused.fp8_producer import (
         bind_norm_fp8_producer)
 
     def _pair_lap_ms(fn, iters=30):
@@ -449,7 +449,7 @@ def build(model, run_once) -> tuple[Assembly, dict]:
             host_norm = model.get_submodule(norm_path)
         except AttributeError:
             return
-        from flash_rt.structures.impls import KernelUnavailable as _KU2
+        from flashrt_structures.impls import KernelUnavailable as _KU2
         try:
             producer = bind_norm_fp8_producer(host_norm,
                                               bound.input_scale)
@@ -511,7 +511,7 @@ def build(model, run_once) -> tuple[Assembly, dict]:
     # projections the packs do not cover: the language o_proj and the
     # vl-self-attention output projection each take an FP8 seat of
     # their own — the same linear_proj family the automatic path binds.
-    from flash_rt.structures.impls.linear_proj.fp8_static import (
+    from flashrt_structures.impls.linear_proj.fp8_static import (
         bind_proj_seam)
 
     def _lap_ms(fn, iters=30):
@@ -572,7 +572,7 @@ def build(model, run_once) -> tuple[Assembly, dict]:
                       **MERGER_PROJ}.items():
         take_proj(path, mod, cal[path])
 
-    from flash_rt.structures.impls.linear_proj import (
+    from flashrt_structures.impls.linear_proj import (
         nvfp4_balance as proj_w4)
     for path, mod in DIT_OUT.items():
         c = cal[path]
@@ -605,7 +605,7 @@ def build(model, run_once) -> tuple[Assembly, dict]:
                 asm.place(f"{path}.{attr}", mod)
 
     # the vision patch projection: one full-patch seat
-    from flash_rt.structures.impls.patch_projection import (
+    from flashrt_structures.impls.patch_projection import (
         bind_flat_patch_projection)
     for path, mod in PATCH.items():
         c = cal[path]
@@ -626,7 +626,7 @@ def build(model, run_once) -> tuple[Assembly, dict]:
     # packed projection's tail — the family composition the automatic
     # path engages, called through the same adapter entry. It requires
     # the packs above to be in the seat map already.
-    from flash_rt.structures.adapters.qwen_per_head_qk_norm_rope import (
+    from flashrt_structures.adapters.qwen_per_head_qk_norm_rope import (
         PerHeadGqaQkNormRopeAdapter)
     rope_result = PerHeadGqaQkNormRopeAdapter()(
         model, types.SimpleNamespace(swaps=asm.swaps, notes={}))
@@ -696,7 +696,7 @@ def build(model, run_once) -> tuple[Assembly, dict]:
             # NVFP4 + swizzled scale factors and the pack consumes the
             # wire — the form the chain race seats automatically, taken
             # here by declaration
-            from flash_rt.structures.impls.qkv_pack import (
+            from flashrt_structures.impls.qkv_pack import (
                 nvfp4_balance as pack_w4)
             producer = asm.take(norm_path, "adaln_producer",
                                 lambda: bind_adaln_producer(
@@ -806,8 +806,8 @@ def main() -> int:
     fixture = torch.load(args.fixture, map_location="cpu",
                          weights_only=False)["inputs"]
 
-    from flash_rt.structures import swap
-    from flash_rt.structures.impls import unavailable_report
+    from flashrt_structures import swap
+    from flashrt_structures.impls import unavailable_report
 
     captured = {}
     original_get_action = model.get_action
@@ -865,7 +865,7 @@ def main() -> int:
         # the hot path (eager, compiled, captured) carries the current
         # observation through — and pays the refresh it would pay in
         # production
-        from flash_rt.structures.impls.cadence_static.cross_attention \
+        from flashrt_structures.impls.cadence_static.cross_attention \
             import wire_refresh_to_producer
         wire_refresh_to_producer(model, extras["cadence_statics"],
                                  run_once)

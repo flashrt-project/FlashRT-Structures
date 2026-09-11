@@ -3,7 +3,7 @@
 import pytest
 import torch
 
-from flash_rt.structures.impls.graph_lowering.pi052_denoise import (
+from flashrt_structures.impls.graph_lowering.pi052_denoise import (
     Pi05DenoiseGraphLoweringAdapter,
 )
 

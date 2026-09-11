@@ -9,8 +9,8 @@ and keep-host is a decision with a reason attached, not a refusal.
 
 import pytest
 
-from flash_rt.structures import schemes
-from flash_rt.structures.schemes import (Decision, Fp8Static, PointStat,
+from flashrt_structures import schemes
+from flashrt_structures.schemes import (Decision, Fp8Static, PointStat,
                                          QuantScheme, validate_request)
 
 
@@ -82,7 +82,7 @@ def test_collector_channel_amax_and_second_moment():
     import numpy as np
     import torch
 
-    from flash_rt.structures.points import Collector, Point
+    from flashrt_structures.points import Collector, Point
 
     pt = Point(name="x", path="m.proj")
     key = f"{pt.path}|{pt.name}"

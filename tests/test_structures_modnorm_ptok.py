@@ -11,8 +11,8 @@ import pytest
 import torch
 from torch import nn
 
-from flash_rt.structures.discover import discover
-from flash_rt.structures.points import resolve as resolve_points
+from flashrt_structures.discover import discover
+from flashrt_structures.points import resolve as resolve_points
 
 
 class _Attn(nn.Module):
@@ -74,7 +74,7 @@ def test_wrong_shapes_are_correctly_not_discovered():
 
 
 def test_variant_specific_calibration_points():
-    from flash_rt.structures.autobuild import _spec_points
+    from flashrt_structures.autobuild import _spec_points
 
     seam = discover(_Model(), ("modnorm_qkv_chain",))[0]
     assert _spec_points(seam) == ("attn_in", "o_in", "ffn_in", "ffn_hid")
@@ -92,7 +92,7 @@ def test_chain_owns_its_producer_fed_members():
     # projection stay individually bindable
     import inspect
 
-    from flash_rt.structures import autobuild
+    from flashrt_structures import autobuild
 
     src = inspect.getsource(autobuild.auto_swaps)
     assert "per_token_table" in src
@@ -102,14 +102,14 @@ def test_chain_owns_its_producer_fed_members():
 def test_router_binds_the_table_form():
     import inspect
 
-    from flash_rt.structures import autobuild
+    from flashrt_structures import autobuild
 
     src = inspect.getsource(autobuild._bind_auto)
     assert "fp8_ptok_table" in src
 
 
 def test_wire_projection_off_wire_fallback_is_counted():
-    from flash_rt.structures.impls.modnorm_qkv_chain.fp8_ptok_table import (
+    from flashrt_structures.impls.modnorm_qkv_chain.fp8_ptok_table import (
         WireProj)
 
     lin = nn.Linear(64, 64)
@@ -122,14 +122,14 @@ def test_wire_projection_off_wire_fallback_is_counted():
 
 
 def test_binder_refuses_unreleased_producer_build(monkeypatch):
-    from flash_rt.structures.impls.modnorm_qkv_chain import fp8_ptok_table
+    from flashrt_structures.impls.modnorm_qkv_chain import fp8_ptok_table
 
     class _OldPkg:
         pass
 
     fp8_ptok_table._producer.cache_clear()
     monkeypatch.setattr(
-        "flash_rt.structures.impls.hub_kernel",
+        "flashrt_structures.impls.hub_kernel",
         lambda repo, version: _OldPkg())
     with pytest.raises(ValueError, match="predates the per-token"):
         fp8_ptok_table._producer()

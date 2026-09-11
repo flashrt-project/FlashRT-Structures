@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from flash_rt.structures import impls
+from flashrt_structures import impls
 
 
 def test_every_unavailability_raises_one_catchable_type(monkeypatch):
@@ -93,7 +93,7 @@ def test_qkv_rope_mid_forward_refusal_falls_back_in_production_mode():
     # forward that was attached with the fallback default.
     import inspect
 
-    from flash_rt.structures.adapters import packed_qkv_rope
+    from flashrt_structures.adapters import packed_qkv_rope
 
     source = inspect.getsource(packed_qkv_rope)
     assert "except GuardRefused" in source

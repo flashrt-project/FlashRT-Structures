@@ -19,7 +19,7 @@ from pathlib import Path
 
 import torch
 
-from flash_rt.structures import capture as capture_stage
+from flashrt_structures import capture as capture_stage
 
 from full_graph import pin_action_noise, replay_ms
 from groot_n17 import build, clone_tree, load_policy
@@ -29,7 +29,7 @@ def install_fa4_interface(model) -> str | None:
     """Register FA4 as a host attention interface and switch to it."""
     import importlib
 
-    from flash_rt.structures.impls import KernelUnavailable, hub_kernel
+    from flashrt_structures.impls import KernelUnavailable, hub_kernel
 
     try:
         fa4 = hub_kernel("kernels-community/flash-attn4", ">=0")
@@ -76,8 +76,8 @@ def main() -> int:
     fixture = torch.load(args.fixture, map_location="cpu",
                          weights_only=False)["inputs"]
 
-    from flash_rt.structures import swap
-    from flash_rt.structures.impls.cadence_static.cross_attention import (
+    from flashrt_structures import swap
+    from flashrt_structures.impls.cadence_static.cross_attention import (
         wire_refresh_to_producer)
 
     captured = {}

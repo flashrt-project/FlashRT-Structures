@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import torch
 
-from flash_rt.structures.adapters.factored_two_way_attention import (
+from flashrt_structures.adapters.factored_two_way_attention import (
     FactoredTwoWayAttentionAdapter,
 )
-from flash_rt.structures.impls.attention_core import two_way_fa2
+from flashrt_structures.impls.attention_core import two_way_fa2
 
 
 class _FakeFa2:
@@ -165,7 +165,7 @@ def test_two_way_adapter_routes_and_restores(monkeypatch):
     import importlib
 
     mod = importlib.import_module(
-        "flash_rt.structures.adapters.factored_two_way_attention")
+        "flashrt_structures.adapters.factored_two_way_attention")
     monkeypatch.setattr(mod, "bind_two_way_attention",
                         lambda capture: Core())
     root = Root()

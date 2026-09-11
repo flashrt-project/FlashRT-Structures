@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import torch
 import torch.nn.functional as F
 
-from flash_rt.structures.impls.norm_fused import bf16
+from flashrt_structures.impls.norm_fused import bf16
 
 
 def test_norm_fused_uses_native_residual_norm_package(monkeypatch):

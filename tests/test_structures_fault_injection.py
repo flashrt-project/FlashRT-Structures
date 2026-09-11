@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 
-from flash_rt.structures.gates import check_env, env_lock, verify_record
+from flashrt_structures.gates import check_env, env_lock, verify_record
 
 
 def _probe_style_record():
@@ -51,7 +51,7 @@ def test_fake_cache_progress_is_the_documented_fault():
     # the multimodal receipts: a static window masquerading as history
     # sends host glue down its continuation branch. The contract pin
     # lives with the family; this case documents it as a fault class.
-    from flash_rt.structures.impls.decode_loop.whole_step import (
+    from flashrt_structures.impls.decode_loop.whole_step import (
         _StaticHybridCache)
 
     c = _StaticHybridCache(2, [0], 1, 4, 16, "cpu")

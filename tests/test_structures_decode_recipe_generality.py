@@ -13,8 +13,8 @@ import torch
 
 transformers = pytest.importorskip("transformers")
 
-from flash_rt.structures.discover import discover  # noqa: E402
-from flash_rt.structures.schemes import W8A16Decode  # noqa: E402
+from flashrt_structures.discover import discover  # noqa: E402
+from flashrt_structures.schemes import W8A16Decode  # noqa: E402
 
 
 def _tiny(cfg_name, model_name, **kw):

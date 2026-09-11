@@ -10,7 +10,7 @@ model tracks a new observation with no manual refresh call.
 import pytest
 import torch
 
-from flash_rt.structures.impls.cadence_static.cross_attention import (
+from flashrt_structures.impls.cadence_static.cross_attention import (
     bind_cross_attention_kv,
     capture_cross_attention_kv,
     discover_cross_attention_kv,

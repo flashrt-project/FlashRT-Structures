@@ -7,9 +7,9 @@ import pytest
 import torch
 from torch import nn
 
-from flash_rt.structures.impls.qkv_pack import fp8_static
-from flash_rt.structures.guard import GuardRefused
-from flash_rt.structures.swap import attach
+from flashrt_structures.impls.qkv_pack import fp8_static
+from flashrt_structures.guard import GuardRefused
+from flashrt_structures.swap import attach
 
 
 class _FakeKernel:

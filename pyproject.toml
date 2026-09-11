@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flashrt-structures"
+version = "0.2.0"
+description = "Attach FlashRT's verified acceleration structures to an unmodified PyTorch host (lerobot, Isaac-GR00T, openpi, transformers, diffusers, vLLM, SGLang) with no fork and no edit to the host."
+readme = "README.md"
+license = {text = "Apache-2.0"}
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: GPU :: NVIDIA CUDA",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+# flash-rt supplies the structure catalog (flash_rt.catalog), the house
+# calibration reduction (flash_rt.core.calibration) and the precision
+# receipt (flash_rt.core.precision_spec). None of that needs the compiled
+# extensions; the pure-Python flash-rt wheel is enough.
+dependencies = [
+    "flash-rt>=0.1.0",
+    "numpy",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+# Kernels arrive through the Hugging Face kernel hub client at bind time.
+# Optional because the specs, the adapters and every refusal are readable
+# without it; a bind that needs a kernel refuses legibly and names this
+# extra when it is absent.
+#
+# Deliberately only the client. Naming torch here makes pip install the
+# newest one into an environment that had none, and which kernels exist
+# is decided by the torch version: the hub's published face is thickest
+# at torch 2.11, thin at the newest. Bring your own torch.
+hub = ["kernels>=0.12"]
+torch = ["torch", "safetensors"]
+
+[project.urls]
+Homepage = "https://github.com/flashrt-project/FlashRT-Structures"
+Repository = "https://github.com/flashrt-project/FlashRT-Structures"
+Issues = "https://github.com/flashrt-project/FlashRT-Structures/issues"
+Engine = "https://github.com/flashrt-project/FlashRT"
+
+[tool.setuptools.packages.find]
+include = ["flashrt_structures*"]
+
+[tool.setuptools.package-data]
+flashrt_structures = ["**/*.yaml"]

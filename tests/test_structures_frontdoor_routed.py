@@ -3,9 +3,9 @@ from __future__ import annotations
 import torch
 from torch import nn
 
-from flash_rt.structures.autobuild import AutoPlan
-from flash_rt.structures.frontdoor import _Arm
-from flash_rt.structures.guard import CAST_OK, PROCEED, GuardedSeam
+from flashrt_structures.autobuild import AutoPlan
+from flashrt_structures.frontdoor import _Arm
+from flashrt_structures.guard import CAST_OK, PROCEED, GuardedSeam
 
 
 class RoutedCore(GuardedSeam, nn.Module):

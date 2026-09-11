@@ -45,7 +45,7 @@ FUSED_DEP = {"provider": "hf", "repo": "flashrt/transformer-fused-ops",
 
 @lru_cache(maxsize=1)
 def _packages():
-    from flash_rt.structures.impls import hub_kernel
+    from flashrt_structures.impls import hub_kernel
 
     gda = hub_kernel(GDA_DEP["repo"], GDA_DEP["version"])
     conv = hub_kernel(CONV_DEP["repo"], CONV_DEP["version"])

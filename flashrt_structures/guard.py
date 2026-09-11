@@ -79,7 +79,7 @@ class SeamGuard:
     """One seam's runtime contract, its ledger, and its own exit.
 
     Created at bind time by the implementation, which knows the form it
-    was calibrated for. Given a site by :func:`~flash_rt.structures.swap.attach`,
+    was calibrated for. Given a site by :func:`~flashrt_structures.swap.attach`,
     which knows where in the model it ended up.
     """
 

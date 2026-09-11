@@ -24,7 +24,7 @@ Two further engine facts ride here:
 
 Usage, before constructing the engine::
 
-    from flash_rt.structures.adapters import sglang_engine
+    from flashrt_structures.adapters import sglang_engine
     sglang_engine.install()
     llm = sgl.Engine(model_path=...)
     llm.generate(...)
@@ -173,7 +173,7 @@ if os.environ.get({flag!r}) == "1":
     try:
         import sys
         sys.path.insert(0, os.environ[{path!r}])
-        from flash_rt.structures.adapters import sglang_engine
+        from flashrt_structures.adapters import sglang_engine
         sglang_engine._patch_runner()
     except Exception as e:
         print(f"[structures.sglang] hook inert: {{e!r}}", flush=True)

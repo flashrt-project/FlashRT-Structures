@@ -31,7 +31,7 @@ from pathlib import Path
 
 import torch
 
-from flash_rt.structures import capture as capture_stage
+from flashrt_structures import capture as capture_stage
 
 from groot_n17 import Assembly, build, clone_tree, load_policy
 
@@ -120,9 +120,9 @@ def main() -> int:
     fixture = torch.load(args.fixture, map_location="cpu",
                          weights_only=False)["inputs"]
 
-    from flash_rt.structures import swap
-    from flash_rt.structures.impls import unavailable_report
-    from flash_rt.structures.impls.cadence_static.cross_attention import (
+    from flashrt_structures import swap
+    from flashrt_structures.impls import unavailable_report
+    from flashrt_structures.impls.cadence_static.cross_attention import (
         wire_refresh_to_producer)
 
     captured = {}
@@ -192,7 +192,7 @@ def main() -> int:
 
         wstore = None
         if sequential:
-            from flash_rt.structures.storage import WeightStore
+            from flashrt_structures.storage import WeightStore
             wstore = WeightStore(checkpoint=str(args.checkpoint))
 
         if args.arm == "explicit":
@@ -206,8 +206,8 @@ def main() -> int:
                      "swaps": len(asm.swaps),
                      "refused": len(asm.refused)}
         else:
-            from flash_rt import structures
-            from flash_rt.structures.impls.cadence_static.cross_attention \
+            import flashrt_structures as structures
+            from flashrt_structures.impls.cadence_static.cross_attention \
                 import (bind_cross_attention_kv, capture_cross_attention_kv,
                         discover_cross_attention_kv)
             sites = discover_cross_attention_kv(model)
@@ -319,7 +319,7 @@ def main() -> int:
             "ledger": handle.summary(),
         }
         if weights_receipt is None:
-            from flash_rt.structures.storage import WeightStore
+            from flashrt_structures.storage import WeightStore
             weights_receipt = handle.consume(
                 WeightStore(checkpoint=str(args.checkpoint)))
         report["weights"] = weights_receipt

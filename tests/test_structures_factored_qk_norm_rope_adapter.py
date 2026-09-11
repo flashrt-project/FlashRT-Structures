@@ -6,8 +6,8 @@ import pytest
 import torch
 from torch import nn
 
-from flash_rt.structures.adapters import factored_qk_norm_rope as adapter_mod
-from flash_rt.structures.impls.qkv_pack import fp8_static
+from flashrt_structures.adapters import factored_qk_norm_rope as adapter_mod
+from flashrt_structures.impls.qkv_pack import fp8_static
 
 
 class _FakeGemm:

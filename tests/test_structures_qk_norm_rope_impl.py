@@ -7,9 +7,9 @@ import types
 import pytest
 import torch
 
-from flash_rt.structures.guard import GuardRefused
-from flash_rt.structures.impls.qk_norm_rope import projection_bf16
-from flash_rt.structures.impls.qk_norm_rope import per_head_gqa
+from flashrt_structures.guard import GuardRefused
+from flashrt_structures.impls.qk_norm_rope import projection_bf16
+from flashrt_structures.impls.qk_norm_rope import per_head_gqa
 
 
 class _FakeKernel:

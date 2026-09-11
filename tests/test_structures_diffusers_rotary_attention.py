@@ -3,7 +3,7 @@ from __future__ import annotations
 import torch
 from torch import nn
 
-from flash_rt.structures.adapters.diffusers_rotary_attention import (
+from flashrt_structures.adapters.diffusers_rotary_attention import (
     DiffusersRotaryAttentionAdapter,
 )
 
@@ -23,7 +23,7 @@ class _Processor:
         key = key.unflatten(2, (attn.heads, -1))
         value = value.unflatten(2, (attn.heads, -1))
         if rotary_emb is not None:
-            from flash_rt.structures.adapters.diffusers_rotary_attention \
+            from flashrt_structures.adapters.diffusers_rotary_attention \
                 import _apply_rotary
             query = _apply_rotary(query, rotary_emb)
             key = _apply_rotary(key, rotary_emb)
@@ -67,7 +67,7 @@ def test_rotary_adapter_preserves_processor_semantics(monkeypatch):
     expected = host.attention(x, rotary)
 
     monkeypatch.setattr(
-        "flash_rt.structures.adapters.diffusers_rotary_attention."
+        "flashrt_structures.adapters.diffusers_rotary_attention."
         "bind_dense_attention_best",
         lambda rows: _Core(),
     )

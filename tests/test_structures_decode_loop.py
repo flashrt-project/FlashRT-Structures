@@ -6,7 +6,7 @@ import pytest
 import torch
 from torch import nn
 
-from flash_rt.structures.impls.decode_loop.whole_step import (
+from flashrt_structures.impls.decode_loop.whole_step import (
     _StaticHybridCache,
     _find_stack,
 )
@@ -65,7 +65,7 @@ def test_stack_discovery_is_by_slots_not_names():
 
 
 def test_mtp_and_release_arms_are_scheme_decisions():
-    from flash_rt.structures import schemes
+    from flashrt_structures import schemes
 
     assert schemes.QuantScheme.mtp_projection_format is None
     assert schemes.QuantScheme.gdn_projection_format is None
@@ -80,7 +80,7 @@ def test_mtp_and_release_arms_are_scheme_decisions():
 
 
 def test_decode_loop_door_is_exported():
-    from flash_rt import structures
+    import flashrt_structures as structures
 
     assert callable(structures.decode_loop)
     assert "decode_loop" in structures.__all__
@@ -89,7 +89,7 @@ def test_decode_loop_door_is_exported():
 def test_explain_renders_a_plan_without_a_model():
     from types import SimpleNamespace
 
-    from flash_rt import structures
+    import flashrt_structures as structures
 
     plan = SimpleNamespace(
         swaps={"a.mlp": object(), "b.mlp": object()},
@@ -116,7 +116,7 @@ def test_mtp_tensor_loader_names_its_refusals(tmp_path):
 
     import pytest
 
-    from flash_rt.structures.impls.decode_loop.mtp_speculative import (
+    from flashrt_structures.impls.decode_loop.mtp_speculative import (
         _load_mtp_tensors)
 
     # neither shipping form present
@@ -133,7 +133,7 @@ def test_mtp_tensor_loader_names_its_refusals(tmp_path):
 def test_draft_precision_axes_are_explicit_and_refuse_by_name():
     import pytest
 
-    from flash_rt.structures.impls.decode_loop.mtp_speculative import (
+    from flashrt_structures.impls.decode_loop.mtp_speculative import (
         DRAFT_FORMATS, check_draft_formats)
 
     # the measured arms are the whole vocabulary

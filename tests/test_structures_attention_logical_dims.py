@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 import torch
 
-from flash_rt.structures.impls.attention_core import fa2_seqused
+from flashrt_structures.impls.attention_core import fa2_seqused
 
 
 class _FakePackedKVAttention:

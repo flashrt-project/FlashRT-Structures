@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import torch
 
-from flash_rt.structures.impls import attention_core
+from flashrt_structures.impls import attention_core
 
 
 class _Core(torch.nn.Module):
@@ -26,7 +26,7 @@ def test_family_names_the_bound_variant_and_keeps_the_trail(monkeypatch):
         attention_core, "bind_dense_attention",
         lambda captures: (_ for _ in ()).throw(
             OSError("no build variant for this host")))
-    from flash_rt.structures.impls.attention_core import fa4_cute
+    from flashrt_structures.impls.attention_core import fa4_cute
 
     bound = _Core()
     monkeypatch.setattr(fa4_cute, "bind_dense_attention",
@@ -43,7 +43,7 @@ def test_family_names_the_bound_variant_and_keeps_the_trail(monkeypatch):
 
 def test_trail_separates_an_absent_package_from_a_shape_decline(
         monkeypatch):
-    from flash_rt.structures.impls.attention_core import (fa4_cute,
+    from flashrt_structures.impls.attention_core import (fa4_cute,
                                                           masked_mha)
 
     # fa2 executes its qualification and declines the captured form
@@ -69,7 +69,7 @@ def test_trail_separates_an_absent_package_from_a_shape_decline(
 
 def test_a_site_no_variant_serves_still_declines_rather_than_raises(
         monkeypatch):
-    from flash_rt.structures.impls.attention_core import (fa4_cute,
+    from flashrt_structures.impls.attention_core import (fa4_cute,
                                                           fa4_fp8,
                                                           masked_mha)
 

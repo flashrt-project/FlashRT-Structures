@@ -17,8 +17,8 @@ import pytest
 import torch
 from torch import nn
 
-from flash_rt.structures import workspace
-from flash_rt.structures.impls.qkv_pack import fp8_static
+from flashrt_structures import workspace
+from flashrt_structures.impls.qkv_pack import fp8_static
 
 
 class _FakeKernel:
