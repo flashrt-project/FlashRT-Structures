@@ -98,6 +98,11 @@ Three boundaries produce refusals that look like bugs and are not:
 
 ## Tests
 
+The experimental [native prequantized W4A16 route](docs/native_nvfp4.md) uses
+an independently built and installed FlashRT Tensor artifact. It shares the
+engine lifecycle, guards, weight store and ledger with the other forms; its
+support and qualification limits are documented separately.
+
 ```bash
 pip install -e . pytest
 pytest tests            # the CPU set; two *_gpu tests need a CUDA device and hub access

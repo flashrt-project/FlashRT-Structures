@@ -44,6 +44,9 @@ dependencies = [
 hub = ["kernels>=0.12"]
 torch = ["torch", "safetensors"]
 
+[project.entry-points."vllm.general_plugins"]
+flashrt_native = "flashrt_structures.adapters.vllm_native:register"
+
 [project.urls]
 Homepage = "https://github.com/flashrt-project/FlashRT-Structures"
 Repository = "https://github.com/flashrt-project/FlashRT-Structures"

@@ -29,6 +29,11 @@ things follow:
 - The native `flash_rt.load_model` path is a different thing entirely and
   needs a local build. See the README's Build section.
 
+An explicitly installed native Tensor artifact can also serve prequantized
+regions through the same load/attach lifecycle. This experimental opt-in route
+is documented in [Native prequantized W4A16 integration](native_nvfp4.md),
+including its separate build, qualification and refusal requirements.
+
 Bring your own torch. The extra deliberately does not name it, because
 **which kernels exist is decided by your torch version** — the published
 face is thickest at torch 2.11 and thin at the newest release. A bind
