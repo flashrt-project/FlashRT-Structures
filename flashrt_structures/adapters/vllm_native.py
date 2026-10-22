@@ -538,7 +538,7 @@ def _install_native_decode_attention(model, api):
                     qkv[:n].contiguous(), positions[:n].contiguous(), self._native_qw, self._native_kw,
                     cs if cs is not None else self._native_qw, cs is not None,
                     float(self.q_norm.variance_epsilon), k_cache, v_cache, decode.block_tables, decode.seq_lens,
-                    self.softmax_offset, window, float(self.head_dim**-0.5),
+                    self.softmax_offset, window, float(self.head_dim**-0.5), int(getattr(decode, "max_seq_len", 0) or 0),
                 )
                 if n != num_tokens:
                     attn_output = torch.cat([attn_output, torch.zeros((num_tokens - n, attn_output.shape[1]),
@@ -556,7 +556,7 @@ def _install_native_decode_attention(model, api):
             window = left + 1 if left >= 0 else 0
             attn_output = api._decode_attention(
                 q[:n].contiguous(), k_cache, v_cache, decode.block_tables, decode.seq_lens,
-                self.softmax_offset, window, float(self.head_dim**-0.5),
+                self.softmax_offset, window, float(self.head_dim**-0.5), int(getattr(decode, "max_seq_len", 0) or 0),
             )
             if n != num_tokens:
                 attn_output = torch.cat([attn_output, torch.zeros_like(q[n:])], 0)
