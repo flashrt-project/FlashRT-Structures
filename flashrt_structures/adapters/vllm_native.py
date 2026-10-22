@@ -512,8 +512,28 @@ def _install_native_decode_attention(model, api):
             return None
         return md.decode, md.num_decodes
 
+    fuse_rope = os.environ.get("FLASHRT_NATIVE_ATTN_FUSE", "1") == "1"
+
     def attention_core(self, positions, qkv):
         k_cache, v_cache, layer_slots = self._cache_views()
+        if fuse_rope and k_cache is not None:
+            p = plan(self)
+            if p is not None:
+                decode, n = p
+                num_tokens = qkv.shape[0]
+                left = self.impl.window_left
+                window = left + 1 if left >= 0 else 0
+                cs = self._cos_sin()
+                attn_output = api._decode_attention_qkv(
+                    qkv[:n].contiguous(), positions[:n].contiguous(), self._native_qw, self._native_kw,
+                    cs if cs is not None else self._native_qw, cs is not None,
+                    float(self.q_norm.variance_epsilon), k_cache, v_cache, decode.block_tables, decode.seq_lens,
+                    self.softmax_offset, window, float(self.head_dim**-0.5),
+                )
+                if n != num_tokens:
+                    attn_output = torch.cat([attn_output, torch.zeros((num_tokens - n, attn_output.shape[1]),
+                                                                      dtype=attn_output.dtype, device=attn_output.device)], 0)
+                return attn_output
         q = qk_norm_rope_cache(
             qkv, positions, self.q_norm.weight, self.k_norm.weight, self.q_norm.variance_epsilon,
             self._cos_sin(), k_cache, v_cache, layer_slots, self.num_heads, self.num_kv_heads, self.head_dim,
@@ -551,6 +571,8 @@ def _install_native_decode_attention(model, api):
         if isinstance(module, FlintAttention):
             module.forward = forward.__get__(module, FlintAttention)
             module._native_attention_core = attention_core.__get__(module, FlintAttention)
+            module._native_qw = module.q_norm.weight.detach().float().contiguous()
+            module._native_kw = module.k_norm.weight.detach().float().contiguous()
             module._native_decode_plan = plan.__get__(module, FlintAttention)
     _LOG.info("Native decode attention attached (paged KV, up to %d sequences)", max_seqs)
 
