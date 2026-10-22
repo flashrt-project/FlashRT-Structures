@@ -14,6 +14,8 @@ from weakref import WeakKeyDictionary
 
 import torch
 
+from ..guard import GuardRefused
+
 from .. import swap
 from ..impls.decoder_ffn import native_w4a16 as dense_impl
 from ..impls.linear_proj import native_w4a16 as linear_impl
@@ -410,6 +412,37 @@ def attach_native(model, *, capture=None, capacity=8192):
                 ),
                 "linear_proj",
             )
+        lm = getattr(model, "lm_head", None)
+        if (
+            os.environ.get("FLASHRT_NATIVE_LM_HEAD", "0") == "1"
+            and lm is not None
+            and getattr(model, "gguf_path", None)
+        ):
+            # Experimental: NVFP4 vocabulary projection (fp32 logits) replacing the
+            # host's dequantized BF16 copy; bypasses the guarded-seam ledger.
+            import gguf
+            from vllm.models.flint.gguf_nvfp4 import _as_tensor, _repack_nvfp4
+
+            reader = gguf.GGUFReader(model.gguf_path)
+            tensor = {t.name: t for t in reader.tensors}["output.weight"]
+            device = lm.weight.device
+            codes, scales = _repack_nvfp4(_as_tensor(tensor.data).to(device), int(tensor.shape[0]))
+            head = api.LmHead(
+                api.PackedMatrix(codes.contiguous(), scales.view(torch.uint8).contiguous(), 1.0)
+            )
+
+            class _NativeHead:
+                def apply(self, layer, x, bias=None):
+                    if bias is not None:
+                        raise GuardRefused("native lm_head takes no bias")
+                    return head(x)
+
+            lm.quant_method = _NativeHead()
+            lm.weight = torch.nn.Parameter(
+                torch.empty(0, device=device, dtype=torch.bfloat16), requires_grad=False
+            )
+            counts["lm_head"] = 1
+            _LOG.info("Native lm_head attached (NVFP4, fp32 logits)")
         if not swaps:
             raise ValueError("native route found no qualifying prequantized regions")
         model.eval()
