@@ -443,6 +443,12 @@ def attach_native(model, *, capture=None, capacity=8192):
             )
             counts["lm_head"] = 1
             _LOG.info("Native lm_head attached (NVFP4, fp32 logits)")
+        if os.environ.get("FLASHRT_NATIVE_ATTN", "0") == "1":
+            _install_native_decode_attention(model, api)
+            counts["decode_attention"] = 1
+            if os.environ.get("FLASHRT_NATIVE_FUSE", "0") == "1":
+                _install_native_layer_fusion(model, api, swaps)
+                counts["decode_layer_fusion"] = 1
         if not swaps:
             raise ValueError("native route found no qualifying prequantized regions")
         model.eval()
@@ -477,6 +483,120 @@ def attach_native(model, *, capture=None, capacity=8192):
             for refresh in reversed(alias_refreshers):
                 refresh()
         raise
+
+
+def _install_native_decode_attention(model, api):
+    """Experimental: pure single-token decode batches of up to FLASHRT_NATIVE_ATTN_MAX
+    sequences run the native paged-KV split-KV attention (sinks, sliding window);
+    everything else keeps the host attention. Bypasses the guarded-seam ledger."""
+    import torch
+    from vllm.forward_context import get_forward_context
+    from vllm.model_executor.layers.attention.attention import unified_attention_with_output
+    from vllm.models.flint.model import FlintAttention
+    from vllm.models.flint.ops.qk_norm_rope import qk_norm_rope_cache
+    from vllm.v1.attention.backends.flashinfer import FlashInferMetadata
+
+    max_seqs = int(os.environ.get("FLASHRT_NATIVE_ATTN_MAX", "8"))
+
+    def plan(self):
+        md = get_forward_context().attn_metadata
+        md = md.get(self.attn.layer_name) if isinstance(md, dict) else md
+        if (
+            not isinstance(md, FlashInferMetadata)
+            or md.num_prefills != 0
+            or not 0 < md.num_decodes <= max_seqs
+            or md.num_decode_tokens != md.num_decodes
+            or md.decode is None
+            or getattr(md.decode, "q_len_per_req", 1) != 1
+        ):
+            return None
+        return md.decode, md.num_decodes
+
+    def attention_core(self, positions, qkv):
+        k_cache, v_cache, layer_slots = self._cache_views()
+        q = qk_norm_rope_cache(
+            qkv, positions, self.q_norm.weight, self.k_norm.weight, self.q_norm.variance_epsilon,
+            self._cos_sin(), k_cache, v_cache, layer_slots, self.num_heads, self.num_kv_heads, self.head_dim,
+        )
+        num_tokens = qkv.shape[0]
+        p = plan(self) if k_cache is not None else None
+        if p is not None:
+            decode, n = p
+            left = self.impl.window_left
+            window = left + 1 if left >= 0 else 0
+            attn_output = api._decode_attention(
+                q[:n].contiguous(), k_cache, v_cache, decode.block_tables, decode.seq_lens,
+                self.softmax_offset, window, float(self.head_dim**-0.5),
+            )
+            if n != num_tokens:
+                attn_output = torch.cat([attn_output, torch.zeros_like(q[n:])], 0)
+        else:
+            attn_output = torch.empty_like(q)
+            _, k, v = qkv.split([self.q_size, self.kv_size, self.kv_size], dim=-1)
+            unified_attention_with_output(
+                q.view(num_tokens, self.num_heads, self.head_dim),
+                k.view(num_tokens, self.num_kv_heads, self.head_dim),
+                v.view(num_tokens, self.num_kv_heads, self.head_dim),
+                attn_output.view(num_tokens, self.num_heads, self.head_dim),
+                self.attn.layer_name,
+            )
+        return attn_output
+
+    def forward(self, positions, hidden_states):
+        qkv, _ = self.qkv_proj(hidden_states)
+        output, _ = self.o_proj(attention_core(self, positions, qkv))
+        return output
+
+    for module in model.modules():
+        if isinstance(module, FlintAttention):
+            module.forward = forward.__get__(module, FlintAttention)
+            module._native_attention_core = attention_core.__get__(module, FlintAttention)
+            module._native_decode_plan = plan.__get__(module, FlintAttention)
+    _LOG.info("Native decode attention attached (paged KV, up to %d sequences)", max_seqs)
+
+
+def _install_native_layer_fusion(model, api, swaps):
+    """Experimental: single-token pure-decode steps run the frozen frontend's fused PDL chain per
+    layer (residual add + RMSNorm fused into the QKV GEMV, PDL o_proj, norm + router + routed/shared
+    experts, dense FFN with fused norm). Other shapes keep the per-region path."""
+    import torch
+    from vllm.models.flint.model import FlintDecoderLayer
+
+    for name, layer in model.named_modules():
+        if not isinstance(layer, FlintDecoderLayer):
+            continue
+        attn = layer.self_attn
+        # the seams are not attached yet: take them from the pending swap table
+        try:
+            qkv_m = swaps[f"{name}.self_attn.qkv_proj"].seam.bound.matrix
+            o_m = swaps[f"{name}.self_attn.o_proj"].seam.bound.matrix
+            mlp = swaps[f"{name}.mlp"]
+        except KeyError:
+            continue
+        in_w = layer.input_layernorm.weight.detach().float().contiguous()
+        post_w = layer.post_attention_layernorm.weight.detach().float().contiguous()
+        in_eps = float(layer.input_layernorm.variance_epsilon)
+        post_eps = float(layer.post_attention_layernorm.variance_epsilon)
+        routed_args = getattr(getattr(mlp, "bound", None), "args", None)
+        dense_ffn = getattr(mlp, "bound", None) if routed_args is None else None
+        if routed_args is None and (dense_ffn is None or not hasattr(dense_ffn, "gate_up")):
+            continue
+        host_forward = layer.forward
+
+        def forward(positions, hidden_states, residual, *, layer=layer, attn=attn, qkv_m=qkv_m, o_m=o_m,
+                    in_w=in_w, post_w=post_w, in_eps=in_eps, post_eps=post_eps, routed_args=routed_args,
+                    dense_ffn=dense_ffn, host_forward=host_forward):
+            if hidden_states.shape[0] != 1 or attn._native_decode_plan() is None:
+                return host_forward(positions, hidden_states, residual)
+            qkv, residual = api.fused_m1_attn_in(qkv_m, hidden_states, residual, in_w, in_eps)
+            attn_out = attn._native_attention_core(positions, qkv)
+            hidden = api.fused_m1_linear(o_m, attn_out, 0)
+            if routed_args is not None:
+                return api.fused_m1_moe(routed_args, hidden, residual, post_w, post_eps)
+            return api.fused_m1_dense(dense_ffn, hidden, residual, post_w, post_eps)
+
+        layer.forward = forward
+    _LOG.info("Native single-token layer fusion attached")
 
 
 def register():
