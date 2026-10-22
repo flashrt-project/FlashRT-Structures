@@ -316,7 +316,10 @@ def attach_native(model, *, capture=None, capacity=8192):
         c, s = payload["codes"], payload["scales"]
         if interleaved:
             c, s = api.interleave_gate_up(c, s)
-        return api.PackedMatrix(c.to(device), s.to(device), payload["gs"])
+        c, s = c.to(device), s.to(device)
+        if _PER32 in ("dense", "all"):
+            c, s = _requant_per32(c, s)
+        return api.PackedMatrix(c, s, payload["gs"])
 
     def take(path, module, builder, kind, refresh=None):
         # Stash before uploading the replacement. Failure restores the host
@@ -362,12 +365,14 @@ def attach_native(model, *, capture=None, capacity=8192):
                 module=module, g=g, d=d, b=bank_data, router=router, device=device
             ):
                 gc, gs = api.interleave_gate_up(b["gu_codes"], b["gu_scales"])
-                gu = api.PackedMatrix(gc.to(device), gs.to(device), 1.0)
-                dn = api.PackedMatrix(
-                    b["down_codes"].reshape(-1, b["down_codes"].shape[-1]).to(device),
-                    b["down_scales"].reshape(-1, b["down_scales"].shape[-1]).to(device),
-                    1.0,
-                )
+                gc, gs = gc.to(device), gs.to(device)
+                dc = b["down_codes"].reshape(-1, b["down_codes"].shape[-1]).to(device)
+                ds = b["down_scales"].reshape(-1, b["down_scales"].shape[-1]).to(device)
+                if _PER32 == "all":
+                    gc, gs = _requant_per32(gc, gs)
+                    dc, ds = _requant_per32(dc, ds)
+                gu = api.PackedMatrix(gc, gs, 1.0)
+                dn = api.PackedMatrix(dc, ds, 1.0)
                 return routed_impl.bind_packed(
                     router,
                     gu,
@@ -427,9 +432,10 @@ def attach_native(model, *, capture=None, capacity=8192):
             tensor = {t.name: t for t in reader.tensors}["output.weight"]
             device = lm.weight.device
             codes, scales = _repack_nvfp4(_as_tensor(tensor.data).to(device), int(tensor.shape[0]))
-            head = api.LmHead(
-                api.PackedMatrix(codes.contiguous(), scales.view(torch.uint8).contiguous(), 1.0)
-            )
+            codes, scales = codes.contiguous(), scales.view(torch.uint8).contiguous()
+            if _PER32 in ("dense", "all"):
+                codes, scales = _requant_per32(codes, scales)
+            head = api.LmHead(api.PackedMatrix(codes, scales, 1.0))
 
             class _NativeHead:
                 def apply(self, layer, x, bias=None):
@@ -581,6 +587,39 @@ def _install_native_decode_attention(model, api):
     _LOG.info("Native decode attention attached (paged KV, up to %d sequences)", max_seqs)
 
 
+# --- per-32 scale requantization (quality study for the k32 int8 tensor-core path) -----------------------------
+# FLASHRT_NATIVE_PER32 = "" (off) | "dense" (linear projections + LM head) | "all" (also the routed experts).
+# Each pair of adjacent 16-blocks shares the larger E4M3 scale and the codes are re-rounded to E2M1; the result is
+# stored in the per-16 layout (both halves equal), so the existing kernels compute the per-32 model exactly.
+_PER32 = os.environ.get("FLASHRT_NATIVE_PER32", "")
+_E2M1 = [0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0]
+_E2M1_MID = [0.25, 0.75, 1.25, 1.75, 2.5, 3.5, 5.0]
+
+
+def _requant_per32(codes, scales, chunk_rows=2048):
+    dev = codes.device
+    n, kh = codes.shape
+    e4m3 = torch.arange(256, dtype=torch.uint8, device=dev).view(torch.float8_e4m3fn).float()
+    lut = torch.tensor(_E2M1 + [-v for v in _E2M1], dtype=torch.float32, device=dev)
+    mids = torch.tensor(_E2M1_MID, device=dev)
+    out_codes = torch.empty_like(codes)
+    out_scales = torch.empty_like(scales)
+    for r0 in range(0, n, chunk_rows):
+        c = codes[r0:r0 + chunk_rows]; sc = scales[r0:r0 + chunk_rows]; m = c.shape[0]
+        sv = e4m3[sc.long()]                                             # [m, k/16]
+        s32 = torch.maximum(sv[:, 0::2], sv[:, 1::2]).repeat_interleave(2, dim=1)  # [m, k/16]
+        vals = torch.stack([lut[(c & 0xF).long()], lut[(c >> 4).long()]], dim=-1).reshape(m, kh * 2)
+        r = vals * (sv / s32).repeat_interleave(16, dim=1)
+        del vals
+        mag = torch.bucketize(r.abs(), mids)
+        code = (mag + torch.where(r < 0, 8, 0)).to(torch.uint8).reshape(m, kh, 2)
+        del r, mag
+        out_codes[r0:r0 + chunk_rows] = code[:, :, 0] | (code[:, :, 1] << 4)
+        sb = sc.view(m, kh * 2 // 32, 2)
+        out_scales[r0:r0 + chunk_rows] = torch.maximum(sb[:, :, 0], sb[:, :, 1]).repeat_interleave(2, dim=1)
+    return out_codes, out_scales
+
+
 def _install_native_layer_fusion(model, api, swaps):
     """Experimental: single-token pure-decode steps run the frozen frontend's fused PDL chain per
     layer (residual add + RMSNorm fused into the QKV GEMV, PDL o_proj, norm + router + routed/shared
@@ -588,6 +627,9 @@ def _install_native_layer_fusion(model, api, swaps):
     import torch
     from vllm.models.flint.model import FlintDecoderLayer
 
+    # 2..fuse_rows rows run the batched chain (our norm kernel instead of the Triton one, so every boundary can
+    # early-trigger); 0 disables it
+    fuse_rows = int(os.environ.get("FLASHRT_NATIVE_FUSE_ROWS", "8"))
     for name, layer in model.named_modules():
         if not isinstance(layer, FlintDecoderLayer):
             continue
@@ -612,7 +654,14 @@ def _install_native_layer_fusion(model, api, swaps):
         def forward(positions, hidden_states, residual, *, layer=layer, attn=attn, qkv_m=qkv_m, o_m=o_m,
                     in_w=in_w, post_w=post_w, in_eps=in_eps, post_eps=post_eps, routed_args=routed_args,
                     dense_ffn=dense_ffn, host_forward=host_forward):
-            if hidden_states.shape[0] != 1 or attn._native_decode_plan() is None:
+            m = hidden_states.shape[0]
+            if 2 <= m <= fuse_rows and attn._native_decode_plan() is not None:
+                # batched chain: both norms on our PDL kernel, the swapped attention / MLP modules do the rest
+                xn, residual = api.rows_norm(hidden_states, residual, in_w, in_eps)
+                hidden = attn(positions, xn)
+                xn2, residual = api.rows_norm(hidden, residual, post_w, post_eps)
+                return layer.mlp(xn2), residual
+            if m != 1 or attn._native_decode_plan() is None:
                 return host_forward(positions, hidden_states, residual)
             qkv, residual = api.fused_m1_attn_in(qkv_m, hidden_states, residual, in_w, in_eps)
             attn_out = attn._native_attention_core(positions, qkv)
