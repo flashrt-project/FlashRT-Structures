@@ -497,14 +497,18 @@ def _install_native_decode_attention(model, api):
     from vllm.v1.attention.backends.flashinfer import FlashInferMetadata
 
     max_seqs = int(os.environ.get("FLASHRT_NATIVE_ATTN_MAX", "8"))
+    # FP8 KV cache: FlashInfer's XQA decode reads the halved pages faster than our paged kernel from 4 sequences
+    # on (C4 1052 vs 967 tok/s, C8 1602 vs 1584), so the native path only keeps the 1-2 sequence cases there.
+    max_seqs_fp8 = int(os.environ.get("FLASHRT_NATIVE_ATTN_MAX_FP8", "2"))
 
-    def plan(self):
+    def plan(self, k_cache=None):
         md = get_forward_context().attn_metadata
         md = md.get(self.attn.layer_name) if isinstance(md, dict) else md
+        limit = max_seqs_fp8 if (k_cache is not None and k_cache.dtype in (torch.uint8, torch.int8, torch.float8_e4m3fn)) else max_seqs
         if (
             not isinstance(md, FlashInferMetadata)
             or md.num_prefills != 0
-            or not 0 < md.num_decodes <= max_seqs
+            or not 0 < md.num_decodes <= limit
             or md.num_decode_tokens != md.num_decodes
             or md.decode is None
             or getattr(md.decode, "q_len_per_req", 1) != 1
@@ -517,7 +521,7 @@ def _install_native_decode_attention(model, api):
     def attention_core(self, positions, qkv):
         k_cache, v_cache, layer_slots = self._cache_views()
         if fuse_rope and k_cache is not None:
-            p = plan(self)
+            p = plan(self, k_cache)
             if p is not None:
                 decode, n = p
                 num_tokens = qkv.shape[0]
@@ -539,7 +543,7 @@ def _install_native_decode_attention(model, api):
             self._cos_sin(), k_cache, v_cache, layer_slots, self.num_heads, self.num_kv_heads, self.head_dim,
         )
         num_tokens = qkv.shape[0]
-        p = plan(self) if k_cache is not None else None
+        p = plan(self, k_cache) if k_cache is not None else None
         if p is not None:
             decode, n = p
             left = self.impl.window_left
