@@ -503,6 +503,30 @@ def _install_native_decode_attention(model, api):
     from vllm.v1.attention.backends.flashinfer import FlashInferMetadata
 
     max_seqs = int(os.environ.get("FLASHRT_NATIVE_ATTN_MAX", "8"))
+    # FLASHRT_NATIVE_KV_V4=1 (opt-in, fp8 KV cache only): keep an NVFP4 shadow of V (codes + per-16 E4M3 scales)
+    # beside the fp8 cache; every cache write also fills it (Triton writer on the host paths, the fused kernel on
+    # ours) and the native decode attention reads K fp8 + V fp4 (200 instead of 256 bytes per token and head).
+    kv_v4 = os.environ.get("FLASHRT_NATIVE_KV_V4", "0") == "1"
+    v4_shadow = None
+    if kv_v4:
+        from .kv_v4 import V4Shadow, v_fp4_write
+        import vllm.models.flint.model as _flint_model
+        v4_shadow = V4Shadow()
+        _orig_qk = _flint_model.qk_norm_rope_cache
+
+        def qk_norm_rope_cache_v4(qkv, positions, q_weight, k_weight, eps, cos_sin_cache, k_cache, v_cache,
+                                  slot_mapping, num_q_heads, num_kv_heads, head_dim, *args, **kwargs):
+            q = _orig_qk(qkv, positions, q_weight, k_weight, eps, cos_sin_cache, k_cache, v_cache, slot_mapping,
+                         num_q_heads, num_kv_heads, head_dim, *args, **kwargs)
+            if k_cache is not None and k_cache is not qkv and slot_mapping is not None:
+                codes, scales = v4_shadow.get(k_cache)
+                v_fp4_write(qkv[:, (num_q_heads + num_kv_heads) * head_dim:], qkv.stride(0), slot_mapping, codes,
+                            scales, int(k_cache.shape[1]), num_kv_heads)
+            return q
+
+        _flint_model.qk_norm_rope_cache = qk_norm_rope_cache_v4
+        qk_norm_rope_cache = qk_norm_rope_cache_v4
+        _LOG.info("NVFP4 value shadow cache enabled (FLASHRT_NATIVE_KV_V4=1)")
     # FP8 KV cache: FlashInfer's XQA decode reads the halved pages faster than our paged kernel from 4 sequences
     # on (C4 1052 vs 967 tok/s, C8 1602 vs 1584), so the native path only keeps the 1-2 sequence cases there.
     max_seqs_fp8 = int(os.environ.get("FLASHRT_NATIVE_ATTN_MAX_FP8", "2"))
@@ -534,12 +558,22 @@ def _install_native_decode_attention(model, api):
                 left = self.impl.window_left
                 window = left + 1 if left >= 0 else 0
                 cs = self._cos_sin()
-                attn_output = api._decode_attention_qkv(
-                    qkv[:n].contiguous(), positions[:n].contiguous(), self._native_qw, self._native_kw,
-                    cs if cs is not None else self._native_qw, cs is not None,
-                    float(self.q_norm.variance_epsilon), k_cache, v_cache, decode.block_tables, decode.seq_lens,
-                    self.softmax_offset, window, float(self.head_dim**-0.5), int(getattr(decode, "max_seq_len", 0) or 0),
-                )
+                mlen = int(getattr(decode, "max_seq_len", 0) or 0)
+                if v4_shadow is not None and k_cache.dtype in (torch.uint8, torch.int8, torch.float8_e4m3fn):
+                    codes, scales = v4_shadow.get(k_cache)
+                    attn_output = api._decode_attention_qkv_v4(
+                        qkv[:n].contiguous(), positions[:n].contiguous(), self._native_qw, self._native_kw,
+                        cs if cs is not None else self._native_qw, cs is not None,
+                        float(self.q_norm.variance_epsilon), k_cache, v_cache, decode.block_tables, decode.seq_lens,
+                        self.softmax_offset, window, float(self.head_dim**-0.5), mlen, codes, scales,
+                    )
+                else:
+                    attn_output = api._decode_attention_qkv(
+                        qkv[:n].contiguous(), positions[:n].contiguous(), self._native_qw, self._native_kw,
+                        cs if cs is not None else self._native_qw, cs is not None,
+                        float(self.q_norm.variance_epsilon), k_cache, v_cache, decode.block_tables, decode.seq_lens,
+                        self.softmax_offset, window, float(self.head_dim**-0.5), mlen,
+                    )
                 if n != num_tokens:
                     attn_output = torch.cat([attn_output, torch.zeros((num_tokens - n, attn_output.shape[1]),
                                                                       dtype=attn_output.dtype, device=attn_output.device)], 0)
@@ -554,10 +588,18 @@ def _install_native_decode_attention(model, api):
             decode, n = p
             left = self.impl.window_left
             window = left + 1 if left >= 0 else 0
-            attn_output = api._decode_attention(
-                q[:n].contiguous(), k_cache, v_cache, decode.block_tables, decode.seq_lens,
-                self.softmax_offset, window, float(self.head_dim**-0.5), int(getattr(decode, "max_seq_len", 0) or 0),
-            )
+            mlen = int(getattr(decode, "max_seq_len", 0) or 0)
+            if v4_shadow is not None and k_cache.dtype in (torch.uint8, torch.int8, torch.float8_e4m3fn):
+                codes, scales = v4_shadow.get(k_cache)
+                attn_output = api._decode_attention_v4(
+                    q[:n].contiguous(), k_cache, v_cache, decode.block_tables, decode.seq_lens,
+                    self.softmax_offset, window, float(self.head_dim**-0.5), mlen, codes, scales,
+                )
+            else:
+                attn_output = api._decode_attention(
+                    q[:n].contiguous(), k_cache, v_cache, decode.block_tables, decode.seq_lens,
+                    self.softmax_offset, window, float(self.head_dim**-0.5), mlen,
+                )
             if n != num_tokens:
                 attn_output = torch.cat([attn_output, torch.zeros_like(q[n:])], 0)
         else:
