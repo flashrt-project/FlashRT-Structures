@@ -1,0 +1,898 @@
+{
+  "llama_revision": "1b44e30775dcb2f93952116b05f89e5bd797fb00",
+  "records": [
+    {
+      "id": "impl_lru_cache",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Implement a thread-safe LRU cache class in Python 3 with type hints. It must support get(key), put(key, value), a configurable capacity, and an optional per-entry TTL in seconds. Include a short pytest test module that covers eviction order, TTL expiry and concurrent access."
+        }
+      ],
+      "tools": null,
+      "sources": [],
+      "expected_tokens": 58,
+      "expected_sha256": "aff3b7c09c5a58350e5ca75ea993c3329cc00a027865e89de86b6924df43cbae"
+    },
+    {
+      "id": "prefill_1k",
+      "messages": [
+        {
+          "role": "system",
+          "content": "You are an expert software engineering agent working inside a user's repository. You can read files, search the codebase, edit files and run shell commands through the provided tools. Work step by step: inspect before you edit, keep changes minimal and consistent with the surrounding code, and explain what you changed and why. When you write code, make it complete and runnable."
+        },
+        {
+          "role": "user",
+          "content": "Here are the relevant files from the repository.\n\n### src/llama-kv-cache.cpp\n```cpp\n{{SOURCE_0}}\n```\n\n\n\nTask: the files above are part of the inference runtime. Review them for correctness problems in how KV-cache cells, sequence ids and batch splitting interact (off-by-one errors, missing bounds checks, state that is not reset between requests). List the three most serious issues you find with file/function references, then propose a minimal patch for the most serious one as a unified diff, and describe a test that would have caught it. If you need to inspect more of the repository, call the tools."
+        }
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "read_file",
+            "description": "Read a text file from the repository.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "description": "Repository-relative path"
+                },
+                "offset": {
+                  "type": "integer"
+                },
+                "limit": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "path"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "grep",
+            "description": "Search the repository with a regular expression.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "pattern": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "pattern"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "edit_file",
+            "description": "Replace an exact string in a file.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "old_string": {
+                  "type": "string"
+                },
+                "new_string": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "old_string",
+                "new_string"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "bash",
+            "description": "Run a shell command in the repository root and return stdout/stderr.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "string"
+                },
+                "timeout_s": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "command"
+              ]
+            }
+          }
+        }
+      ],
+      "sources": [
+        {
+          "path": "src/llama-kv-cache.cpp",
+          "file_sha256": "e31e5b246bf6d303995a57058458764c2a7f1296530db1c3333fb3ce301e8b29",
+          "prefix_characters": 1560,
+          "marker": "{{SOURCE_0}}"
+        }
+      ],
+      "expected_tokens": 1022,
+      "expected_sha256": "9f00ef744f399314633e77ede8fed125f729c0553d51726395158fec4e7217b8"
+    },
+    {
+      "id": "prefill_4k",
+      "messages": [
+        {
+          "role": "system",
+          "content": "You are an expert software engineering agent working inside a user's repository. You can read files, search the codebase, edit files and run shell commands through the provided tools. Work step by step: inspect before you edit, keep changes minimal and consistent with the surrounding code, and explain what you changed and why. When you write code, make it complete and runnable."
+        },
+        {
+          "role": "user",
+          "content": "Here are the relevant files from the repository.\n\n### src/llama-graph.cpp\n```cpp\n{{SOURCE_0}}\n```\n\n\n\nTask: the files above are part of the inference runtime. Review them for correctness problems in how KV-cache cells, sequence ids and batch splitting interact (off-by-one errors, missing bounds checks, state that is not reset between requests). List the three most serious issues you find with file/function references, then propose a minimal patch for the most serious one as a unified diff, and describe a test that would have caught it. If you need to inspect more of the repository, call the tools."
+        }
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "read_file",
+            "description": "Read a text file from the repository.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "description": "Repository-relative path"
+                },
+                "offset": {
+                  "type": "integer"
+                },
+                "limit": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "path"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "grep",
+            "description": "Search the repository with a regular expression.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "pattern": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "pattern"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "edit_file",
+            "description": "Replace an exact string in a file.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "old_string": {
+                  "type": "string"
+                },
+                "new_string": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "old_string",
+                "new_string"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "bash",
+            "description": "Run a shell command in the repository root and return stdout/stderr.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "string"
+                },
+                "timeout_s": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "command"
+              ]
+            }
+          }
+        }
+      ],
+      "sources": [
+        {
+          "path": "src/llama-graph.cpp",
+          "file_sha256": "ef3a77bf7c74ca45dd2b1bb7542326bebe205a24c335446d2d51f2f1bb94e8c7",
+          "prefix_characters": 12136,
+          "marker": "{{SOURCE_0}}"
+        }
+      ],
+      "expected_tokens": 4089,
+      "expected_sha256": "7bf35fc4d382da6770c3b7f0ff9afe40c4df58a300914790e95bdecd827272e4"
+    },
+    {
+      "id": "prefill_8k",
+      "messages": [
+        {
+          "role": "system",
+          "content": "You are an expert software engineering agent working inside a user's repository. You can read files, search the codebase, edit files and run shell commands through the provided tools. Work step by step: inspect before you edit, keep changes minimal and consistent with the surrounding code, and explain what you changed and why. When you write code, make it complete and runnable."
+        },
+        {
+          "role": "user",
+          "content": "Here are the relevant files from the repository.\n\n### src/llama-context.cpp\n```cpp\n{{SOURCE_0}}\n```\n\n\n\nTask: the files above are part of the inference runtime. Review them for correctness problems in how KV-cache cells, sequence ids and batch splitting interact (off-by-one errors, missing bounds checks, state that is not reset between requests). List the three most serious issues you find with file/function references, then propose a minimal patch for the most serious one as a unified diff, and describe a test that would have caught it. If you need to inspect more of the repository, call the tools."
+        }
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "read_file",
+            "description": "Read a text file from the repository.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "description": "Repository-relative path"
+                },
+                "offset": {
+                  "type": "integer"
+                },
+                "limit": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "path"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "grep",
+            "description": "Search the repository with a regular expression.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "pattern": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "pattern"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "edit_file",
+            "description": "Replace an exact string in a file.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "old_string": {
+                  "type": "string"
+                },
+                "new_string": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "old_string",
+                "new_string"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "bash",
+            "description": "Run a shell command in the repository root and return stdout/stderr.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "string"
+                },
+                "timeout_s": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "command"
+              ]
+            }
+          }
+        }
+      ],
+      "sources": [
+        {
+          "path": "src/llama-context.cpp",
+          "file_sha256": "2a25e556cb0d16725e01ce853fb1b76da91dcb41b803ce1a6bacec89bfb94aa5",
+          "prefix_characters": 29653,
+          "marker": "{{SOURCE_0}}"
+        }
+      ],
+      "expected_tokens": 8188,
+      "expected_sha256": "716c9d19d09d18c12f06b9c9cd6e913f21d91d9823019da6ffcd3ee529608900"
+    },
+    {
+      "id": "prefill_16k",
+      "messages": [
+        {
+          "role": "system",
+          "content": "You are an expert software engineering agent working inside a user's repository. You can read files, search the codebase, edit files and run shell commands through the provided tools. Work step by step: inspect before you edit, keep changes minimal and consistent with the surrounding code, and explain what you changed and why. When you write code, make it complete and runnable."
+        },
+        {
+          "role": "user",
+          "content": "Here are the relevant files from the repository.\n\n### src/llama-batch.cpp\n```cpp\n{{SOURCE_0}}\n```\n\n### src/llama-model-loader.cpp\n```cpp\n{{SOURCE_1}}\n```\n\n\n\nTask: the files above are part of the inference runtime. Review them for correctness problems in how KV-cache cells, sequence ids and batch splitting interact (off-by-one errors, missing bounds checks, state that is not reset between requests). List the three most serious issues you find with file/function references, then propose a minimal patch for the most serious one as a unified diff, and describe a test that would have caught it. If you need to inspect more of the repository, call the tools."
+        }
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "read_file",
+            "description": "Read a text file from the repository.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "description": "Repository-relative path"
+                },
+                "offset": {
+                  "type": "integer"
+                },
+                "limit": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "path"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "grep",
+            "description": "Search the repository with a regular expression.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "pattern": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "pattern"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "edit_file",
+            "description": "Replace an exact string in a file.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "old_string": {
+                  "type": "string"
+                },
+                "new_string": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "old_string",
+                "new_string"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "bash",
+            "description": "Run a shell command in the repository root and return stdout/stderr.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "string"
+                },
+                "timeout_s": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "command"
+              ]
+            }
+          }
+        }
+      ],
+      "sources": [
+        {
+          "path": "src/llama-batch.cpp",
+          "file_sha256": "bdaa2cea85556483d008a214bd20b8d8c3a851a95e26a1ec7fc0151b1b5ced25",
+          "prefix_characters": 47704,
+          "marker": "{{SOURCE_0}}"
+        },
+        {
+          "path": "src/llama-model-loader.cpp",
+          "file_sha256": "702c36b758178981be9f18cd6f3111c40ca1bb11c1dc688a7afd4c58fe5bb248",
+          "prefix_characters": 8879,
+          "marker": "{{SOURCE_1}}"
+        }
+      ],
+      "expected_tokens": 16371,
+      "expected_sha256": "f4d3e164ba6830d2bb20e24b21bcc1b92334c8698132dd4c730ffa9ef52d9c74"
+    },
+    {
+      "id": "prefill_32k",
+      "messages": [
+        {
+          "role": "system",
+          "content": "You are an expert software engineering agent working inside a user's repository. You can read files, search the codebase, edit files and run shell commands through the provided tools. Work step by step: inspect before you edit, keep changes minimal and consistent with the surrounding code, and explain what you changed and why. When you write code, make it complete and runnable."
+        },
+        {
+          "role": "user",
+          "content": "Here are the relevant files from the repository.\n\n### src/llama-model-loader.cpp\n```cpp\n{{SOURCE_0}}\n```\n\n### src/llama-vocab.cpp\n```cpp\n{{SOURCE_1}}\n```\n\n\n\nTask: the files above are part of the inference runtime. Review them for correctness problems in how KV-cache cells, sequence ids and batch splitting interact (off-by-one errors, missing bounds checks, state that is not reset between requests). List the three most serious issues you find with file/function references, then propose a minimal patch for the most serious one as a unified diff, and describe a test that would have caught it. If you need to inspect more of the repository, call the tools."
+        }
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "read_file",
+            "description": "Read a text file from the repository.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "description": "Repository-relative path"
+                },
+                "offset": {
+                  "type": "integer"
+                },
+                "limit": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "path"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "grep",
+            "description": "Search the repository with a regular expression.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "pattern": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "pattern"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "edit_file",
+            "description": "Replace an exact string in a file.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "old_string": {
+                  "type": "string"
+                },
+                "new_string": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "old_string",
+                "new_string"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "bash",
+            "description": "Run a shell command in the repository root and return stdout/stderr.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "string"
+                },
+                "timeout_s": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "command"
+              ]
+            }
+          }
+        }
+      ],
+      "sources": [
+        {
+          "path": "src/llama-model-loader.cpp",
+          "file_sha256": "702c36b758178981be9f18cd6f3111c40ca1bb11c1dc688a7afd4c58fe5bb248",
+          "prefix_characters": 81139,
+          "marker": "{{SOURCE_0}}"
+        },
+        {
+          "path": "src/llama-vocab.cpp",
+          "file_sha256": "e6dac06f02e0264f7a2ed7062e7603ec0eeb8ae96568819874e42adbb2dc1f38",
+          "prefix_characters": 37036,
+          "marker": "{{SOURCE_1}}"
+        }
+      ],
+      "expected_tokens": 32765,
+      "expected_sha256": "1f4c9483f9bc7851c3aa08c68e1b0eb7a132de8f141b4294ae59b39378c46541"
+    },
+    {
+      "id": "prefill_64k",
+      "messages": [
+        {
+          "role": "system",
+          "content": "You are an expert software engineering agent working inside a user's repository. You can read files, search the codebase, edit files and run shell commands through the provided tools. Work step by step: inspect before you edit, keep changes minimal and consistent with the surrounding code, and explain what you changed and why. When you write code, make it complete and runnable."
+        },
+        {
+          "role": "user",
+          "content": "Here are the relevant files from the repository.\n\n### src/llama-batch.cpp\n```cpp\n{{SOURCE_0}}\n```\n\n### src/llama-model-loader.cpp\n```cpp\n{{SOURCE_1}}\n```\n\n### src/llama-sampler.cpp\n```cpp\n{{SOURCE_2}}\n```\n\n\n\nTask: the files above are part of the inference runtime. Review them for correctness problems in how KV-cache cells, sequence ids and batch splitting interact (off-by-one errors, missing bounds checks, state that is not reset between requests). List the three most serious issues you find with file/function references, then propose a minimal patch for the most serious one as a unified diff, and describe a test that would have caught it. If you need to inspect more of the repository, call the tools."
+        }
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "read_file",
+            "description": "Read a text file from the repository.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "description": "Repository-relative path"
+                },
+                "offset": {
+                  "type": "integer"
+                },
+                "limit": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "path"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "grep",
+            "description": "Search the repository with a regular expression.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "pattern": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "pattern"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "edit_file",
+            "description": "Replace an exact string in a file.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "old_string": {
+                  "type": "string"
+                },
+                "new_string": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "old_string",
+                "new_string"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "bash",
+            "description": "Run a shell command in the repository root and return stdout/stderr.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "string"
+                },
+                "timeout_s": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "command"
+              ]
+            }
+          }
+        }
+      ],
+      "sources": [
+        {
+          "path": "src/llama-batch.cpp",
+          "file_sha256": "bdaa2cea85556483d008a214bd20b8d8c3a851a95e26a1ec7fc0151b1b5ced25",
+          "prefix_characters": 47704,
+          "marker": "{{SOURCE_0}}"
+        },
+        {
+          "path": "src/llama-model-loader.cpp",
+          "file_sha256": "702c36b758178981be9f18cd6f3111c40ca1bb11c1dc688a7afd4c58fe5bb248",
+          "prefix_characters": 81139,
+          "marker": "{{SOURCE_1}}"
+        },
+        {
+          "path": "src/llama-sampler.cpp",
+          "file_sha256": "d0c147129ded606691b0b3e78562bec36f53459446aa7a5bac23bb93a01c86f6",
+          "prefix_characters": 119836,
+          "marker": "{{SOURCE_2}}"
+        }
+      ],
+      "expected_tokens": 65515,
+      "expected_sha256": "bc893ad5549c00b56104c29a8ed67126561788631fa96f1fca7adcc85fd5e8f5"
+    },
+    {
+      "id": "prefill_100k",
+      "messages": [
+        {
+          "role": "system",
+          "content": "You are an expert software engineering agent working inside a user's repository. You can read files, search the codebase, edit files and run shell commands through the provided tools. Work step by step: inspect before you edit, keep changes minimal and consistent with the surrounding code, and explain what you changed and why. When you write code, make it complete and runnable."
+        },
+        {
+          "role": "user",
+          "content": "Here are the relevant files from the repository.\n\n### src/llama-model-loader.cpp\n```cpp\n{{SOURCE_0}}\n```\n\n### src/llama-sampler.cpp\n```cpp\n{{SOURCE_1}}\n```\n\n### src/llama-chat.cpp\n```cpp\n{{SOURCE_2}}\n```\n\n### src/llama-grammar.cpp\n```cpp\n{{SOURCE_3}}\n```\n\n### src/llama-kv-cache-iswa.cpp\n```cpp\n{{SOURCE_4}}\n```\n\n### src/llama-arch.cpp\n```cpp\n{{SOURCE_5}}\n```\n\n\n\nTask: the files above are part of the inference runtime. Review them for correctness problems in how KV-cache cells, sequence ids and batch splitting interact (off-by-one errors, missing bounds checks, state that is not reset between requests). List the three most serious issues you find with file/function references, then propose a minimal patch for the most serious one as a unified diff, and describe a test that would have caught it. If you need to inspect more of the repository, call the tools."
+        }
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "read_file",
+            "description": "Read a text file from the repository.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "description": "Repository-relative path"
+                },
+                "offset": {
+                  "type": "integer"
+                },
+                "limit": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "path"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "grep",
+            "description": "Search the repository with a regular expression.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "pattern": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "pattern"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "edit_file",
+            "description": "Replace an exact string in a file.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "old_string": {
+                  "type": "string"
+                },
+                "new_string": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "old_string",
+                "new_string"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "bash",
+            "description": "Run a shell command in the repository root and return stdout/stderr.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "string"
+                },
+                "timeout_s": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "command"
+              ]
+            }
+          }
+        }
+      ],
+      "sources": [
+        {
+          "path": "src/llama-model-loader.cpp",
+          "file_sha256": "702c36b758178981be9f18cd6f3111c40ca1bb11c1dc688a7afd4c58fe5bb248",
+          "prefix_characters": 81139,
+          "marker": "{{SOURCE_0}}"
+        },
+        {
+          "path": "src/llama-sampler.cpp",
+          "file_sha256": "d0c147129ded606691b0b3e78562bec36f53459446aa7a5bac23bb93a01c86f6",
+          "prefix_characters": 152020,
+          "marker": "{{SOURCE_1}}"
+        },
+        {
+          "path": "src/llama-chat.cpp",
+          "file_sha256": "0029616465e6d641c1e75a0e0e6e132f3ea6177593735d7f16c89e7edfbbe9a8",
+          "prefix_characters": 41630,
+          "marker": "{{SOURCE_2}}"
+        },
+        {
+          "path": "src/llama-grammar.cpp",
+          "file_sha256": "97d76071a2ed1b0c4ce827f002f554b12a25593776adb525dde33ac4cb1eb1e9",
+          "prefix_characters": 56536,
+          "marker": "{{SOURCE_3}}"
+        },
+        {
+          "path": "src/llama-kv-cache-iswa.cpp",
+          "file_sha256": "f24037a7f83675a67a63abcca1463d2071d3b8630b03c179ee5f0891c31b2917",
+          "prefix_characters": 11360,
+          "marker": "{{SOURCE_4}}"
+        },
+        {
+          "path": "src/llama-arch.cpp",
+          "file_sha256": "8bdd4e82fbeb86d68069f2f9759bf7c0ad45b9fd7c3f37d85dc655e336e87738",
+          "prefix_characters": 42094,
+          "marker": "{{SOURCE_5}}"
+        }
+      ],
+      "expected_tokens": 99986,
+      "expected_sha256": "bbe6d6ad921307095e5a21c167f366039d0096ea3331f9489430e305123515f7"
+    }
+  ]
+}

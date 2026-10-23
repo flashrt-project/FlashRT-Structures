@@ -5,6 +5,8 @@ acceleration structures to an **unmodified** PyTorch host: `lerobot`,
 Isaac-GR00T, `openpi`, `transformers`, `diffusers`, and inside vLLM /
 SGLang. No fork, no edit to the host's source. Kernels arrive from the
 Hugging Face kernel hub at bind time.
+The experimental Flint integration additionally uses a separately built,
+optional operator backend and a pinned host patch.
 
 ```python
 import flashrt_structures as structures
@@ -37,6 +39,7 @@ This package is everything that acts on them for a PyTorch host:
 | `adapters/` | host adapters: `transformers`, `diffusers`, Gemma / Qwen attention, gated-delta, and the vLLM / SGLang engine hooks |
 | `discover.py`, `autobuild.py`, `points.py`, `schemes.py`, `gates.py` | structural discovery, the one-pass discover → calibrate → bind assembly, calibration collection, quantisation schemes, accuracy judgment |
 | `guard.py`, `swap.py`, `frontdoor.py`, `stages.py`, `recipe.py` | the runtime contract and ledger, attach / detach, the one-call door, graph capture with declared swap windows, recipes |
+| `backends/flint/` | independently built optional Flint operator package: Tensor API, CUDA/Triton, quantization/packing and vLLM execution composition |
 | `examples/` | the explicit pipeline: seat tables, calibration hooks and binder calls written out by hand for GR00T N1.7 and π0.5 |
 
 Structure specs, references and bindings are **not** here. A new structure
@@ -96,12 +99,60 @@ Three boundaries produce refusals that look like bugs and are not:
   structures; [`docs/structure_contributing.md`](docs/structure_contributing.md)
   — the contribution boundary and PR self-review checklist.
 
+## Flint on vLLM (experimental, SM120)
+
+**vLLM + FlashRT** accelerates Flint decode and prefill with FlashRT
+operators for NVFP4/W4A8 projections, FFNs and paged attention. vLLM manages
+scheduling and KV allocation. Setup requires the independent
+[`flashrt-structures-flint` backend](backends/flint/README.md) and the pinned
+vLLM patch linked below. Core installation remains kernel-free; the optional
+backend has its own build, native modules, provenance and validation.
+
+Decode measurements on RTX 5090, using a paired vLLM baseline for each row:
+
+| 1,022-token prompt | vLLM | vLLM + FlashRT | Speedup | Record |
+|---|---:|---:|---:|---|
+| Batch 1 | 275.7 tok/s | **530.7 tok/s** | **1.93×** | Current-build FP8 KV |
+| Batch 8 | 1417 tok/s | **1715 tok/s** | **1.21× (+21%)** | Historical BF16 KV |
+
+**Batch 8: up to 21% in the historical paired measurement**, recorded
+2026-10-23 with an earlier build on a different RTX 5090 system: BF16 KV,
+memory utilization 0.94, 256 output tokens, maximum 64 sequences. This is not
+a current-build remeasurement. The batch-1 row uses the 2026-10-24 FP8 KV
+protocol. The guide keeps both records, their configurations and the
+current-build batch-8 comparison separate.
+
+[Setup, batch 1–8 measurements and limits](docs/flint_vllm.md) ·
+[Operator backend and lifecycle](docs/native_nvfp4.md).
+
 ## Tests
+
+The experimental [FlashRT prequantized W4A16 integration](docs/native_nvfp4.md) uses
+the independently built and installed `flashrt-structures-flint` artifact. It shares the
+engine lifecycle, guards, weight store and ledger with the other forms; its
+support and qualification limits are documented separately.
 
 ```bash
 pip install -e . pytest
 pytest tests            # the CPU set; two *_gpu tests need a CUDA device and hub access
 ```
+
+## Sources and credit
+
+[FlashRT](https://github.com/flashrt-project/FlashRT) provides the structure
+catalog and original standalone kernels. This repository owns the host
+adapters, attachment lifecycle and separately packaged Flint backend. Model and serving ownership remain with
+[RecursiveSI Flint](https://huggingface.co/RecursiveSI/flint) and
+[vLLM](https://github.com/vllm-project/vllm). The optional prefill route adapts
+[SageAttention](https://github.com/thu-ml/SageAttention) in the optional backend, with
+[FlashInfer](https://github.com/flashinfer-ai/flashinfer),
+[CUTLASS](https://github.com/NVIDIA/cutlass) and
+[Triton](https://github.com/triton-lang/triton) primitives. Adapted kernel source and
+license notices are maintained in the
+[backend vendor record](backends/flint/flashrt_structures_flint/csrc/sage2/VENDOR.md).
+The Flint benchmark corpus comes from [llama.cpp](https://github.com/ggml-org/llama.cpp);
+vLLM is the executor baseline for those measurements. For FlashRT's paper
+citation, see the [upstream citation section](https://github.com/flashrt-project/FlashRT#citation).
 
 ## License
 

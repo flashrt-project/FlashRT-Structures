@@ -25,7 +25,8 @@ other one's concerns.
 | Engine lifecycle integration | `adapters/` | Structure definitions or model-specific kernels |
 | Precision/statistics policy | `schemes.py`, `points.py`, `gates.py` | A second calibration API or hidden defaults |
 | Runtime replacement, refusal, ledger, rollback | `guard.py`, `swap.py`, `frontdoor.py` | Silent fallback or process-global policy |
-| Hardware support and entry-point availability | Published kernel package metadata | A second architecture table in FlashRT |
+| Hardware support and entry-point availability | Installed operator package metadata | A second architecture table in consumer code |
+| Optional Flint Tensor API, quantization, packing, CUDA/Triton, execution composition | Independent `backends/flint/` distribution | Core discovery/lifecycle or implicit compilation |
 
 A recurring boundary found in at least two unrelated host families may be a
 structure. A model-only path is a binding or host stage. A faster kernel for an
@@ -48,8 +49,12 @@ only the material needed for the proposed surface:
 Before adding a mechanism, search the catalog, discovery rules, schemes,
 adapters, diagnostics, and tests. Reuse an existing structure or executable
 form when its contract fits. Keep a PR focused on one structure boundary or
-one independently reviewable behavior; kernel-package work belongs in its own
-repository and review.
+one independently reviewable behavior. Externally owned kernel work belongs
+in its owner repository. The optional Flint backend is maintained here as a
+separate distribution under `backends/flint/`; review it as producer work, with
+its own build, provenance, ABI/device, arithmetic and capture evidence. Core
+`flashrt_structures/` remains kernel-free. See the explicit scope in
+[`AGENTS.md`](../AGENTS.md#optional-operator-backend-ownership).
 
 ## 3. Contribution workflow
 
@@ -78,7 +83,9 @@ provisional; do not encode the first host as a universal abstraction.
   capability probe, or plan construction. A route decided at bind and read
   per call, such as a declared shape band or an already-chosen variant, is not
   bookkeeping; it is the form that was bound.
-- Use the shared Hub loader. Symbol presence is a capability hint, not proof
+- Use the shared Hub loader for Hub artifacts, or the bind-time optional
+  backend loader for the independently installed Flint package. Symbol
+  presence is a capability hint, not proof
   that a shape, dtype, layout, or architecture is qualified.
 - Route unsupported cases through an explicit refusal or declared host
   fallback. Record the reason in the ledger.
@@ -89,7 +96,9 @@ provisional; do not encode the first host as a universal abstraction.
 When a required published kernel capability is absent, stop that region and
 report `blocked_on_kernel`: nearest public API, missing signature or envelope,
 real shapes/dtypes/layout/device, consumers, and acceptance gates. Do not copy
-kernel source into this repository or load from a contributor's checkout.
+kernel source into the core consumer or load from a contributor's checkout.
+The independently built `backends/flint/` producer is the scoped exception;
+consume its installed artifact through the optional backend loader.
 
 ### 3.3 Add evidence proportional to risk
 

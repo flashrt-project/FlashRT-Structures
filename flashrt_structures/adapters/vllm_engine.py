@@ -354,6 +354,7 @@ def _patch_would_not_survive() -> str | None:
 
 
 def install_load_hook(*, on_attached=None, allow_spawn=False,
+                      attach_fn=None, load_context=None,
                       **attach_kwargs):
     """Patch every importable vLLM model-runner so :func:`attach_engine`
     runs after weights load and before the engine's first trace. Set
@@ -371,6 +372,7 @@ def install_load_hook(*, on_attached=None, allow_spawn=False,
     ``allow_spawn=True`` to proceed anyway.
     """
     import importlib
+    from contextlib import nullcontext
     import os
 
     # Find the runners before changing anything: "there is no host here"
@@ -388,7 +390,8 @@ def install_load_hook(*, on_attached=None, allow_spawn=False,
         runner = getattr(module, "GPUModelRunner", None)
         if runner is None or not hasattr(runner, "load_model"):
             continue
-        found.append((modname, runner))
+        if not any(previous is runner for _, previous in found):
+            found.append((modname, runner))
     if not found:
         raise RuntimeError(
             "refused: no vLLM model runner found to hook; the engine "
@@ -414,11 +417,21 @@ def install_load_hook(*, on_attached=None, allow_spawn=False,
         orig = runner.load_model
 
         def load_model(self, *a, __orig=orig, **kw):
-            __orig(self, *a, **kw)
-            handle = attach_engine(self.model, **attach_kwargs)
-            _ATTACHED.append(handle)
-            if on_attached is not None:
-                on_attached(handle)
+            # Aliases/superclass delegation must not attach a model twice.
+            if getattr(self, "_frt_load_hook_active", False):
+                return __orig(self, *a, **kw)
+            self._frt_load_hook_active = True
+            try:
+                context = load_context(self) if load_context is not None else nullcontext()
+                with context:
+                    __orig(self, *a, **kw)
+                    attacher = attach_engine if attach_fn is None else attach_fn
+                    handle = attacher(self.model, **attach_kwargs)
+                    _ATTACHED.append(handle)
+                    if on_attached is not None:
+                        on_attached(handle)
+            finally:
+                self._frt_load_hook_active = False
         runner.load_model = load_model
         patched.append(modname)
     return patched

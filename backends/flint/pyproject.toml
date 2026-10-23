@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flashrt-structures-flint"
+version = "0.1.0"
+description = "Optional SM120 Flint operator backend for FlashRT Structures and vLLM"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "Apache-2.0"}
+dependencies = ["torch>=2.5", "triton"]
+
+[tool.setuptools.packages.find]
+include = ["flashrt_structures_flint*"]
+
+[tool.setuptools.package-data]
+flashrt_structures_flint = ["csrc/**/*"]
