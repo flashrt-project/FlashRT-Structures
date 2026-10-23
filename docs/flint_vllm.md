@@ -1,4 +1,4 @@
-# Flint on vLLM: native SM120 operators
+# Flint: vLLM + FlashRT on RTX 5090
 
 This experimental, opt-in integration runs RecursiveSI Flint's official NVFP4
 checkpoint inside vLLM using separately built FlashRT producers. It covers
@@ -13,7 +13,7 @@ Hub-backed Structures route.
 |---|---|
 | GPU | RTX 5090, SM120, 32 GB; driver 580.159.03 |
 | Runtime | Linux x86-64, Python 3.12.3, CUDA 13.0, torch 2.13.0+cu130, Triton 3.7.1 |
-| Host | vLLM Flint source `aed08d76a682f1475957c0730ea1f5ecb150fda0`, matching vLLM 0.32.0 CUDA binary payload, plus the checked-in host patch |
+| vLLM build | vLLM Flint source `aed08d76a682f1475957c0730ea1f5ecb150fda0`, matching vLLM 0.32.0 CUDA binary payload, plus the checked-in host patch |
 | Dependencies | FlashInfer 0.7.2, Transformers 5.20.2, tokenizers 0.23.3 |
 | Model | `RecursiveSI/flint-nvfp4-gguf`; BF16 activations, FP8 KV with unit host scales |
 | Producer | FlashRT `flash_rt_flint` plus the optional prebuilt Sage2 module |
@@ -29,10 +29,10 @@ The model digest is
 `97cc8009ff9b132d5cf3c488e6767962bb5a5dc158a90ed661bbbddf876b8bde`.
 No new structure specification or default host policy is selected by this
 plugin. The coupled routed/shared FFN wrapper is a provisional host-stage
-composition of the native profile, rather than a registered general catalog structure;
+composition of the FlashRT operator profile, rather than a registered general catalog structure;
 cross-family topology recognition does not certify another model's GPU path.
 
-| Native region | Integration | Qualification / retained boundary |
+| FlashRT region | Integration | Qualification / retained boundary |
 |---|---|---|
 | QKV/O projection | `linear_proj/native_w4a16` | packed NVFP4 weights; row-dependent producer policy |
 | Dense SwiGLU | `decoder_ffn/native_w4a16` | precise SiLU; optional dense FP8 prefill |
@@ -51,7 +51,7 @@ search a source checkout or compile kernels at inference time.
 
 The host patch supplies FP8 KV writes, the LSE/sink prefill path and its
 Sage2 dispatch. It is restricted to Flint's model/attention files. Apply it to
-the pinned host in both baseline and native arms:
+the pinned vLLM build in both the vLLM and vLLM + FlashRT configurations:
 
 ```bash
 export VLLM_SRC="<vllm-source-checkout>"
@@ -66,7 +66,7 @@ pip install -e . --no-deps
 
 The default Hub installation and `vllm_engine.install_load_hook()` behavior
 remain available. The plugin entry point is loaded in each worker; without
-`FLASHRT_STRUCTURES_NATIVE=1`, it leaves the model on the host route.
+`FLASHRT_STRUCTURES_NATIVE=1`, it leaves FlashRT acceleration disabled.
 
 ## Recommended measured configuration
 
@@ -82,8 +82,9 @@ export FLASHRT_NATIVE_DENSE_FP8_MIN_M=1024 FLASHRT_SAGE_PREFILL=1
 export VLLM_DISABLE_COMPILE_CACHE=1
 ```
 
-The producer switches above select computation in the enabled arm;
-use `FLASHRT_STRUCTURES_NATIVE=0` and `FLASHRT_SAGE_PREFILL=0` for the host arm.
+The switches above select FlashRT operators for **vLLM + FlashRT**.
+For the **vLLM** baseline, set `FLASHRT_STRUCTURES_NATIVE=0` and
+`FLASHRT_SAGE_PREFILL=0`.
 All scheduling flags and input tokens must match. Prefix caching is disabled
 for the reported timings.
 
@@ -121,9 +122,12 @@ are excluded. HTTP and request transport are excluded.
 Concurrency does not promise a constant execution batch throughout a request;
 only full steady decode steps contribute to the decode metric.
 
+**vLLM** and **vLLM + FlashRT** use the same pinned/patched vLLM build;
+only the FlashRT acceleration switches differ.
+
 ### Decode
 
-| Prompt tokens/request | Batch | Host tok/s | Native tok/s | Speedup | Throughput gain |
+| Prompt tokens/request | Batch | vLLM (tok/s) | vLLM + FlashRT (tok/s) | Speedup | Throughput gain |
 |---:|---:|---:|---:|---:|---:|
 | 1,022 | 1 | 275.7 | **530.7** | **1.93×** | +92.5% |
 | 1,022 | 8 | 1460.9 | **1613.1** | **1.10×** | +10.4% |
@@ -133,7 +137,7 @@ only full steady decode steps contribute to the decode metric.
 
 ### Prefill
 
-| Prompt tokens/request | Batch | Host ms | Native ms | Speedup | Latency reduction |
+| Prompt tokens/request | Batch | vLLM (ms) | vLLM + FlashRT (ms) | Speedup | Latency reduction |
 |---:|---:|---:|---:|---:|---:|
 | 1,022 | 1 | 44.40 | **41.69** | **1.07×** | 6.1% |
 | 1,022 | 8 | 237.52 | **152.95** | **1.55×** | 35.6% |
@@ -146,16 +150,16 @@ The four-request cell uses three 32,768-token windows and one 24,998-token windo
 
 ### Quality
 
-| Configuration | Mean KL to host BF16 logits | Top-1 agreement |
+| Configuration | Mean KL to vLLM BF16 logits | Top-1 agreement |
 |---|---:|---:|
-| Host, FP8 KV | 0.0048 | 98.8% |
-| Native selected stack, FP8 KV | 0.0045 | 98.0% |
+| vLLM, FP8 KV | 0.0048 | 98.8% |
+| vLLM + FlashRT, FP8 KV | 0.0045 | 98.0% |
 
 Teacher-forced comparison uses four real coding prompts and 63 continuation
 positions each (252 total); the initial prompt-logit row is excluded.
-This is a focused logit comparison to the BF16 host, not an FP32-reference
-score or a broad held-out task evaluation. Low-precision native execution is
-not expected to reproduce the host's entire greedy continuation token for token.
+This is a focused logit comparison to the vLLM BF16 reference, not an FP32-reference
+score or a broad held-out task evaluation. Low-precision FlashRT operators are
+not expected to reproduce vLLM's entire greedy continuation token for token.
 
 ## Reproduce
 
@@ -168,7 +172,7 @@ tokenizer. It does not ship generated token arrays, private prompts or logs.
 git clone https://github.com/ggml-org/llama.cpp.git build/llama.cpp
 python benchmarks/make_flint_inputs.py --llama-dir build/llama.cpp \
   --gguf "$MODEL" --out build/flint-inputs.json
-# Check GPU occupancy before starting. Alternate host/native order across pairs.
+# Check GPU occupancy before starting. Alternate vLLM / vLLM + FlashRT order across pairs.
 FLASHRT_SAGE_PREFILL=0 python benchmarks/flint_vllm.py --arm host \
   --model "$MODEL" --config "$CONFIG" --tokens build/flint-inputs.json \
   --concurrency 1 --in-len 1022 --max-len 8192 --nout 128 --reps 2 --out build/host.json
@@ -182,8 +186,8 @@ use input lengths 32768 or 99986, capacity 110592 and 64 outputs. The
 four-request long-context pair uses short final windows; reproduce it with
 `--allow-ragged --concurrency 4 --in-len 32768`, and inspect `input_lengths`
 instead of assuming all requests have the requested length. The script emits
-actual lengths, token digests, per-step measurements, native-region records
-and the ordinary guarded-seam ledger. It refuses a missing native hook or
+actual lengths, token digests, per-step measurements, FlashRT execution records
+and the ordinary guarded-seam ledger. It refuses a missing FlashRT hook or
 unexpected guarded fallback.
 
 ## Lifecycle and limits
@@ -206,7 +210,7 @@ the selected path; no cross-model, SGLang or other-GPU performance is claimed.
 
 - [RecursiveSI Flint](https://huggingface.co/RecursiveSI/flint) and the
   [official NVFP4 GGUF](https://huggingface.co/RecursiveSI/flint-nvfp4-gguf): model, tokenizer and checkpoint.
-- [FlashRT](https://github.com/flashrt-project/FlashRT): native producers and catalog;
+- [FlashRT](https://github.com/flashrt-project/FlashRT): compute operators and catalog;
   [FlashRT Structures](https://github.com/flashrt-project/FlashRT-Structures): host integration.
 - [vLLM](https://github.com/vllm-project/vllm): host engine and pinned Flint model implementation;
   [source installation](https://docs.vllm.ai/en/latest/contributing/code/) documents precompiled-wheel builds.
@@ -214,6 +218,6 @@ the selected path; no cross-model, SGLang or other-GPU performance is claimed.
   [FlashInfer](https://github.com/flashinfer-ai/flashinfer),
   [CUTLASS](https://github.com/NVIDIA/cutlass) and
   [Triton](https://github.com/triton-lang/triton): attention and quantized compute primitives.
-  Adapted native sources retain their original notices in FlashRT's `csrc/sage2`.
+  Adapted kernel sources retain their original notices in FlashRT's `csrc/sage2`.
 - [llama.cpp](https://github.com/ggml-org/llama.cpp): public MIT-licensed code corpus for input fixtures;
   it is not the executor baseline in these vLLM measurements.

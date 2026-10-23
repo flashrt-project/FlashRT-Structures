@@ -99,25 +99,26 @@ Three boundaries produce refusals that look like bugs and are not:
 
 ## Flint on vLLM (experimental, SM120)
 
-An explicit native route attaches FlashRT's NVFP4/W4A8 projections, FFNs,
-paged decode attention and quantized prefill to Flint in vLLM. The engine
-keeps scheduling and KV allocation. This route requires separately built
-FlashRT artifacts and a pinned Flint host patch; the general Hub route above
-keeps its existing installation and host behavior.
+**vLLM + FlashRT** accelerates Flint decode and prefill with FlashRT
+operators for NVFP4/W4A8 projections, FFNs and paged attention. vLLM manages
+scheduling and KV allocation. Setup requires separately built FlashRT
+artifacts and the pinned vLLM patch linked below.
 
-RTX 5090, matched FP8 KV and graph policy; steady engine-step wall timing.
+Decode throughput on RTX 5090, with matched FP8 KV and graph policy;
+steady engine-step wall timing. **vLLM** is the same pinned/patched build
+with FlashRT acceleration disabled; **vLLM + FlashRT** enables it.
 
-| 1,022-token prompt | Host decode | Native decode | Speedup |
+| 1,022-token prompt | vLLM | vLLM + FlashRT | Speedup |
 |---|---:|---:|---:|
 | Batch 1 | 275.7 tok/s | **530.7 tok/s** | **1.93×** |
 | Batch 8 | 1460.9 tok/s | **1613.1 tok/s** | **1.10×** |
 
 [Setup, batch 1–8 measurements and limits](docs/flint_vllm.md) ·
-[Native operator ownership](docs/native_nvfp4.md).
+[FlashRT operator ownership](docs/native_nvfp4.md).
 
 ## Tests
 
-The experimental [native prequantized W4A16 route](docs/native_nvfp4.md) uses
+The experimental [FlashRT prequantized W4A16 integration](docs/native_nvfp4.md) uses
 an independently built and installed FlashRT Tensor artifact. It shares the
 engine lifecycle, guards, weight store and ledger with the other forms; its
 support and qualification limits are documented separately.
@@ -130,14 +131,14 @@ pytest tests            # the CPU set; two *_gpu tests need a CUDA device and hu
 ## Sources and credit
 
 [FlashRT](https://github.com/flashrt-project/FlashRT) provides the structure
-catalog and native producers; this package owns the host adapters and
+catalog and compute operators; this package owns the host adapters and
 attachment lifecycle. Model and serving ownership remain with
 [RecursiveSI Flint](https://huggingface.co/RecursiveSI/flint) and
 [vLLM](https://github.com/vllm-project/vllm). The optional prefill route adapts
 [SageAttention](https://github.com/thu-ml/SageAttention) through FlashRT, with
 [FlashInfer](https://github.com/flashinfer-ai/flashinfer),
 [CUTLASS](https://github.com/NVIDIA/cutlass) and
-[Triton](https://github.com/triton-lang/triton) primitives. Native source and
+[Triton](https://github.com/triton-lang/triton) primitives. Adapted kernel source and
 license notices are maintained in the
 [producer's vendor record](https://github.com/flashrt-project/FlashRT/blob/feat/flint-w4a8-sm120/csrc/sage2/VENDOR.md).
 The Flint benchmark corpus comes from [llama.cpp](https://github.com/ggml-org/llama.cpp);

@@ -1,6 +1,6 @@
-# Native prequantized W4A16 integration (development)
+# FlashRT prequantized W4A16 integration (development)
 
-This explicit route consumes a built native Tensor artifact from FlashRT.
+This integration uses separately built FlashRT Tensor operators in vLLM.
 It does not use the HF kernel client or inject a kernel source checkout into
 the host. Build and qualify `flash_rt.native_kernels.nvfp4` first, install
 its Python package and native binary into the same environment, then install
@@ -39,7 +39,7 @@ The context covers load and attachment; `attach_fn(model, **kwargs)` runs after
 load and before tracing. Aliases and delegated load calls attach once. A
 failed load unwinds the context and does not mark the runner active forever.
 
-The native adapter uses this window to retain canonical packed bytes in CPU
+The FlashRT adapter uses this window to retain canonical packed bytes in CPU
 memory before Marlin conversion. It offloads replaced host weights through the
 existing `WeightStore` before uploading each replacement, then commits with
 `swap.attach(..., store=store)` and `handle.consume(store)`. This avoids a second resident GPU

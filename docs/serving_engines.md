@@ -31,7 +31,7 @@ things follow:
 
 An explicitly installed native Tensor artifact can also serve prequantized
 regions through the same load/attach lifecycle. This experimental opt-in route
-is documented in [Native prequantized W4A16 integration](native_nvfp4.md),
+is documented in [FlashRT prequantized W4A16 integration](native_nvfp4.md),
 including its separate build, qualification and refusal requirements.
 
 Bring your own torch. The extra deliberately does not name it, because
