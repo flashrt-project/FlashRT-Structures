@@ -17,7 +17,22 @@ import triton.language as tl
 
 _OPS = None
 _NS = "flashrt_sage2_blackwell"
-SRC = Path(os.environ.get("FLASHRT_SAGE2_SRC", str(Path(__file__).resolve().parents[3] / "sage2")))
+def _default_src() -> Path:
+    """FlashRT ships the kernel source under csrc/sage2 (next to the flash_rt package in a source checkout)."""
+    env = os.environ.get("FLASHRT_SAGE2_SRC")
+    if env:
+        return Path(env)
+    try:
+        import flash_rt
+        cand = Path(flash_rt.__file__).resolve().parents[1] / "csrc" / "sage2"
+        if cand.is_dir():
+            return cand
+    except Exception:
+        pass
+    return Path(__file__).resolve().parents[3] / "sage2"
+
+
+SRC = _default_src()
 _LN2 = math.log(2.0)
 _S_FP8_OFFSET = 8.807
 
