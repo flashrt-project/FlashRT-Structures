@@ -14,8 +14,8 @@ artifact ABI, capabilities, packing and standalone qualification.
 | Projection | `linear_proj/native_w4a16` | contiguous BF16 inputs, original checkpoint quantization |
 | Dense FFN | `decoder_ffn/native_w4a16` | precise-SiLU gate/up plus down, losslessly interleaved at bind |
 | Coupled sparse FFN | `routed_ffn/native_w4a16` | router + routed bank + ungated shared expert; artifact-qualified sigmoid/top6 profile |
-| Norm/fusion candidates | host retained | no claim of complete native graph fusion |
-| Attention and KV | host retained | the native ring/contiguous-KV kernel is not a paged-KV kernel |
+| Norm/fusion host stage | optional | explicit decode-layer fusion; restored with the attachment |
+| Attention and KV | optional paged attention | host keeps KV allocation; see the pinned [Flint cell](flint_vllm.md) |
 | Token selection/scheduling | host retained | vLLM owns these stages |
 
 `routed_ffn` describes a larger dataflow than `moe_experts`: router scores,
@@ -68,6 +68,16 @@ Detach before serializing consumed host weights. Do not claim original vLLM
 parameter-subclass metadata survives its generic off-device restore tickets;
 recreate an engine before using host-specific checkpoint reload machinery.
 
+## Optional host stages
+
+The explicit Flint profile may also replace the vocabulary head, paged decode
+attention and layer-level decode composition. These are model host stages,
+not new general structures. They are recorded in `handle.records["native_regions"]`
+outside the per-seam ledger. Original methods and head weights are restored
+on attach failure or pre-capture detach through the same handle and WeightStore.
+The optional Sage2 producer must already be built; no source lookup or kernel
+compilation occurs in this adapter.
+
 ## Opt-in serving
 
 The `vllm.general_plugins` entry installs independently in every worker. With
@@ -75,8 +85,8 @@ the environment variable absent, it makes no changes to the engine.
 
 ```bash
 # Set model/config/tokenizer paths to your local copies. These are examples.
-export MODEL=/path/to/official-nvfp4.gguf
-export CONFIG=/path/to/config-and-tokenizer
+export MODEL="<official-nvfp4.gguf>"
+export CONFIG="<config-and-tokenizer>"
 
 FLASHRT_STRUCTURES_NATIVE=1 VLLM_PLUGINS=flashrt_native \
   python -m vllm.entrypoints.openai.api_server \
@@ -107,3 +117,6 @@ synthetic capacity tests are not held-out model-quality evidence.
 Keep raw receipts, checkpoints, machine paths, private prompts and profiles
 outside both source repositories. No artifact is published or certified merely
 because it imported or one request completed.
+
+For the tested W4A8/FP8/FP4 serving recipe, host version and independent
+prefill/decode measurements, use [Flint on vLLM](flint_vllm.md).

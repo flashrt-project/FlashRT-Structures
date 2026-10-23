@@ -1,0 +1,228 @@
+diff --git a/vllm/models/flint/model.py b/vllm/models/flint/model.py
+--- a/vllm/models/flint/model.py
++++ b/vllm/models/flint/model.py
+@@ -316,7 +316,7 @@
+         impl = self.attn.impl
+         assert isinstance(impl, FlashInferImpl), "Flint requires FlashInfer attention"
+         assert get_current_vllm_config().model_config.dtype == torch.bfloat16
+-        assert self.attn.kv_cache_dtype in ("auto", "bfloat16")
++        assert self.attn.kv_cache_dtype in ("auto", "bfloat16", "fp8", "fp8_e4m3")
+         assert impl.kv_sharing_target_layer_name is None
+         self.impl = impl
+         # Flint decode attention and the fused low-latency decode path.
+diff --git a/vllm/models/flint/ops/qk_norm_rope.py b/vllm/models/flint/ops/qk_norm_rope.py
+--- a/vllm/models/flint/ops/qk_norm_rope.py
++++ b/vllm/models/flint/ops/qk_norm_rope.py
+@@ -18,6 +18,11 @@
+ 
+ # A fixed token tile and no integer specialization: one compiled variant per
+ # (RoPE, PDL) pair, all of which CUDA graph capture and warmup reach.
++import os as _os
++_FAKE_NVFP4_MODE = _os.environ.get("FLASHRT_KV_FAKE_NVFP4", "0")  # "1"/"kv": K and V, "k": keys only, "v": values only
++_FAKE_NVFP4 = _FAKE_NVFP4_MODE in ("1", "kv", "k", "v")
++
++
+ @triton.jit(do_not_specialize=["num_tokens", "num_slots"])
+ def _qk_norm_rope_cache_kernel(
+     qkv_ptr,
+@@ -44,6 +49,10 @@
+     APPLY_ROPE: tl.constexpr,
+     BLOCK_T: tl.constexpr,
+     LAUNCH_DEPENDENTS: tl.constexpr,
++    CACHE_FP8: tl.constexpr,
++    FAKE_NVFP4: tl.constexpr,
++    FAKE_K: tl.constexpr,
++    FAKE_V: tl.constexpr,
+ ):
+     if LAUNCH_DEPENDENTS:
+         # The PDL successor waits on this grid before reading q / K / V.
+@@ -79,6 +88,21 @@
+         n2 = r2
+     o1 = tl.where(is_v, x1, n1).to(tl.bfloat16)
+     o2 = tl.where(is_v, x2, n2).to(tl.bfloat16)
++    if FAKE_NVFP4:
++        # quality probe for an NVFP4 KV cache: K/V rounded to E2M1 with one E4M3 scale per 16 dims, stored as bf16
++        f1 = tl.reshape(o1.to(tl.float32), (BLOCK_T, half // 16, 16))
++        f2 = tl.reshape(o2.to(tl.float32), (BLOCK_T, half // 16, 16))
++        s1 = (tl.max(tl.abs(f1), axis=2) / 6.0).to(tl.float8e4nv).to(tl.float32)[:, :, None]
++        s2 = (tl.max(tl.abs(f2), axis=2) / 6.0).to(tl.float8e4nv).to(tl.float32)[:, :, None]
++        q1 = tl.abs(f1) / tl.where(s1 > 0, s1, 1.0)
++        q2 = tl.abs(f2) / tl.where(s2 > 0, s2, 1.0)
++        l1 = tl.where(q1 < 0.25, 0.0, tl.where(q1 < 0.75, 0.5, tl.where(q1 < 1.25, 1.0, tl.where(q1 < 1.75, 1.5, tl.where(q1 < 2.5, 2.0, tl.where(q1 < 3.5, 3.0, tl.where(q1 < 5.0, 4.0, 6.0)))))))
++        l2 = tl.where(q2 < 0.25, 0.0, tl.where(q2 < 0.75, 0.5, tl.where(q2 < 1.25, 1.0, tl.where(q2 < 1.75, 1.5, tl.where(q2 < 2.5, 2.0, tl.where(q2 < 3.5, 3.0, tl.where(q2 < 5.0, 4.0, 6.0)))))))
++        d1 = tl.reshape(tl.where(f1 < 0, -l1, l1) * s1, (BLOCK_T, half)).to(tl.bfloat16)
++        d2 = tl.reshape(tl.where(f2 < 0, -l2, l2) * s2, (BLOCK_T, half)).to(tl.bfloat16)
++        kv = (is_k & FAKE_K) | (is_v & FAKE_V)
++        o1 = tl.where(kv, d1, o1)
++        o2 = tl.where(kv, d2, o2)
+ 
+     out = q_out_ptr + (tok64 * NUM_Q_HEADS + head) * HEAD_DIM
+     tl.store(out + offs, o1, mask=t_mask & is_q)
+@@ -97,10 +121,19 @@
+     )
+     k_mask = (slot >= 0) & is_k
+     v_mask = (slot >= 0) & is_v
+-    tl.store(k_cache_ptr + dst + offs, o1, mask=k_mask)
+-    tl.store(k_cache_ptr + dst + half + offs, o2, mask=k_mask)
+-    tl.store(v_cache_ptr + dst + offs, o1, mask=v_mask)
+-    tl.store(v_cache_ptr + dst + half + offs, o2, mask=v_mask)
++    if CACHE_FP8:
++        # vLLM allocates the FP8 cache as uint8: round to e4m3 (unit scale) and store the bytes
++        c1 = o1.to(tl.float32).to(tl.float8e4nv).to(tl.uint8, bitcast=True)
++        c2 = o2.to(tl.float32).to(tl.float8e4nv).to(tl.uint8, bitcast=True)
++        tl.store(k_cache_ptr + dst + offs, c1, mask=k_mask)
++        tl.store(k_cache_ptr + dst + half + offs, c2, mask=k_mask)
++        tl.store(v_cache_ptr + dst + offs, c1, mask=v_mask)
++        tl.store(v_cache_ptr + dst + half + offs, c2, mask=v_mask)
++    else:
++        tl.store(k_cache_ptr + dst + offs, o1, mask=k_mask)
++        tl.store(k_cache_ptr + dst + half + offs, o2, mask=k_mask)
++        tl.store(v_cache_ptr + dst + offs, o1, mask=v_mask)
++        tl.store(v_cache_ptr + dst + half + offs, o2, mask=v_mask)
+ 
+ 
+ def qk_norm_rope_cache(
+@@ -182,6 +215,10 @@
+         APPLY_ROPE=cos_sin_cache is not None,
+         BLOCK_T=_BLOCK_T,
+         LAUNCH_DEPENDENTS=launch_dependents,
++        CACHE_FP8=(k_cache.dtype in (torch.uint8, torch.int8, torch.float8_e4m3fn)) and k_cache is not qkv,
++        FAKE_NVFP4=_FAKE_NVFP4 and k_cache is not qkv,
++        FAKE_K=_FAKE_NVFP4_MODE in ("1", "kv", "k"),
++        FAKE_V=_FAKE_NVFP4_MODE in ("1", "kv", "v"),
+         num_warps=4,
+     )
+     return q
+diff --git a/vllm/v1/attention/backends/flashinfer.py b/vllm/v1/attention/backends/flashinfer.py
+--- a/vllm/v1/attention/backends/flashinfer.py
++++ b/vllm/v1/attention/backends/flashinfer.py
+@@ -8,6 +8,7 @@
+ from typing import ClassVar
+ 
+ import numpy as np
++import os
+ import torch
+ from flashinfer import (
+     BatchAttentionWithAttentionSinkWrapper,
+@@ -137,6 +138,17 @@
+     return (k_data, v_data), (k_scale, v_scale), "HND" if hnd else "NHD"
+ 
+ 
++def _lse_sink_prefill_for(obj) -> bool:
++    """FP8 KV with attention sinks on SM120/SM90: the sink prefill wrapper reads FP8 pages incorrectly, so the
++    plain FA2 prefill wrapper is used (it dequantizes FP8 KV) and the sink is folded in afterwards with the
++    returned LSE: out *= sigmoid(lse * ln2 - sink)."""
++    kv = getattr(obj, "kv_cache_dtype", None)
++    sinks_on = bool(getattr(obj, "has_sinks", False)) or getattr(obj, "sinks", None) is not None
++    return sinks_on and kv in (FP8_DTYPE, "fp8", "fp8_e4m3") and (
++        current_platform.is_device_capability(90) or current_platform.is_device_capability_family(120)
++    )
++
++
+ def _get_trtllm_workspace_buffer():
+     global trtllm_workspace_buffer
+     if trtllm_workspace_buffer is None:
+@@ -170,6 +182,35 @@
+     kv_idx = torch.arange(padded, device=device).unsqueeze(0)
+     bool_mask = kv_idx <= q_idx if causal else (kv_idx < q_len).expand(q_len, padded)
+     return _pack_draft_block_bool_mask(bool_mask, num_packed)
++
++
++_SAGE_PREFILL = os.environ.get("FLASHRT_SAGE_PREFILL", "0") == "1"
++
++
++def _sage_prefill(impl, prefill_query, kv_cache_tuple, attn_metadata, out_prefill, layer):
++    """Full-attention prefill on the Sage2 FP8 kernel: K/V of every computed token are gathered from the fp8 pages
++    (unit scale) into bf16 rows, the chunk's queries attend with the causal prefix offset, sinks folded via LSE."""
++    from flashrt_structures.adapters.sage2 import attention_fp8
++    k_cache, v_cache = kv_cache_tuple          # (blocks, H, page, D) fp8
++    bt = attn_metadata.frt_pf_block_tables
++    kv_lens = attn_metadata.frt_pf_kv_lens
++    qo = attn_metadata.frt_pf_qo_indptr
++    H, D = impl.num_kv_heads, impl.head_size
++    hnd = k_cache.shape[1] == H and k_cache.shape[2] != H      # (blocks, H, page, D) vs (blocks, page, H, D)
++    page = k_cache.shape[2] if hnd else k_cache.shape[1]
++    if not getattr(impl, "_sage_logged", False):
++        impl._sage_logged = True
++        logger.info("Sage2 prefill: K cache view %s (%s), page %d", tuple(k_cache.shape), "HND" if hnd else "NHD", page)
++    ks, vs = float(layer._k_scale_float), float(layer._v_scale_float)
++    for r, L in enumerate(kv_lens):
++        qs, qe = qo[r], qo[r + 1]
++        if qe <= qs:
++            continue
++        from flashrt_structures.adapters.sage2 import gather_pages_bf16
++        btr = bt[r].contiguous()
++        k = gather_pages_bf16(k_cache, btr, L, hnd, ks, H, D); v = gather_pages_bf16(v_cache, btr, L, hnd, vs, H, D)
++        q = prefill_query[qs:qe].reshape(qe - qs, impl.num_heads, D)
++        out_prefill[qs:qe].copy_(attention_fp8(q, k, v, impl.sinks, impl.scale).reshape(qe - qs, -1).view_as(out_prefill[qs:qe]))
+ 
+ 
+ def _make_xqa_ragged_draft_block_mask(
+@@ -826,6 +867,11 @@
+     Holds the metadata for the decode portion of the batch.
+     Will be `None` if `num_decode_tokens == 0`.
+     """
++    # FlashRT Sage2 FP8 prefill (full-attention layers, fp8 KV): per prefill request block tables (device),
++    # kv lengths and query offsets (host)
++    frt_pf_block_tables: torch.Tensor | None = None
++    frt_pf_kv_lens: list[int] | None = None
++    frt_pf_qo_indptr: list[int] | None = None
+ 
+ 
+ class FlashInferMetadataBuilder(AttentionMetadataBuilder[FlashInferMetadata]):
+@@ -1340,6 +1386,9 @@
+             ragged_q_lens, q_len_per_req, causal, self.device
+         )
+ 
++    def _lse_sink_prefill(self) -> bool:
++        return _lse_sink_prefill_for(self)
++
+     def _get_prefill_wrapper(
+         self,
+         causal: bool = True,
+@@ -1393,7 +1442,7 @@
+                 if self.has_sinks and (
+                     current_platform.is_device_capability(90)
+                     or current_platform.is_device_capability_family(120)
+-                ):
++                ) and not self._lse_sink_prefill():
+                     assert not self.is_kvcache_nvfp4
+                     self._prefill_wrapper = BatchAttentionWithAttentionSinkWrapper(
+                         self._get_workspace_buffer(),
+@@ -1837,6 +1886,10 @@
+                         disable_split_kv=self.disable_split_kv,
+                     )
+                 attn_metadata.prefill = FIPrefill(wrapper=prefill_wrapper)
++                if _SAGE_PREFILL:
++                    attn_metadata.frt_pf_block_tables = block_table_tensor[prefill_start:]
++                    attn_metadata.frt_pf_kv_lens = kv_lens_prefill_cpu.tolist()
++                    attn_metadata.frt_pf_qo_indptr = qo_indptr_prefill_cpu.tolist()
+ 
+         ## DECODE PATHWAY
+         if num_decodes > 0:
+@@ -2370,6 +2423,25 @@
+                             v_scale=layer._v_scale_float,
+                             out=out_prefill,
+                         )
++                    elif (_SAGE_PREFILL and self.window_left < 0 and _lse_sink_prefill_for(self)
++                          and attn_metadata.frt_pf_kv_lens is not None and not self.is_kvcache_nvfp4):
++                        logger.info_once("FP8 KV + sinks: FlashRT Sage2 FP8 prefill (INT8 QK, FP8 PV) on full-attention layers")
++                        _sage_prefill(self, prefill_query, kv_cache_tuple, attn_metadata, out_prefill, layer)
++                    elif _lse_sink_prefill_for(self) and self.sinks is not None:
++                        logger.info_once("FP8 KV + sinks: FA2 prefill with LSE sink correction")
++                        _, lse = prefill_wrapper.run(
++                            prefill_query,
++                            kv_cache_for_fi,
++                            q_scale=layer._q_scale_float,
++                            k_scale=layer._k_scale_float,
++                            v_scale=layer._v_scale_float,
++                            out=out_prefill,
++                            kv_cache_sf=kv_cache_sf,
++                            return_lse=True,
++                        )
++                        # FlashInfer's LSE is base 2; the sink logit is natural
++                        gate = torch.sigmoid(lse.float() * 0.6931471805599453 - self.sinks.float())
++                        out_prefill.mul_(gate.to(out_prefill.dtype).unsqueeze(-1))
+                     else:
+                         prefill_wrapper.run(
+                             prefill_query,

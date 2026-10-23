@@ -5,6 +5,7 @@ acceleration structures to an **unmodified** PyTorch host: `lerobot`,
 Isaac-GR00T, `openpi`, `transformers`, `diffusers`, and inside vLLM /
 SGLang. No fork, no edit to the host's source. Kernels arrive from the
 Hugging Face kernel hub at bind time.
+The experimental Flint integration below additionally requires a pinned host patch.
 
 ```python
 import flashrt_structures as structures
@@ -96,6 +97,24 @@ Three boundaries produce refusals that look like bugs and are not:
   structures; [`docs/structure_contributing.md`](docs/structure_contributing.md)
   — the contribution boundary and PR self-review checklist.
 
+## Flint on vLLM (experimental, SM120)
+
+An explicit native route attaches FlashRT's NVFP4/W4A8 projections, FFNs,
+paged decode attention and quantized prefill to Flint in vLLM. The engine
+keeps scheduling and KV allocation. This route requires separately built
+FlashRT artifacts and a pinned Flint host patch; the general Hub route above
+keeps its existing installation and host behavior.
+
+RTX 5090, matched FP8 KV and graph policy; steady engine-step wall timing.
+
+| 1,022-token prompt | Host decode | Native decode | Speedup |
+|---|---:|---:|---:|
+| Batch 1 | 275.7 tok/s | **530.7 tok/s** | **1.93×** |
+| Batch 8 | 1460.9 tok/s | **1613.1 tok/s** | **1.10×** |
+
+[Setup, batch 1–8 measurements and limits](docs/flint_vllm.md) ·
+[Native operator ownership](docs/native_nvfp4.md).
+
 ## Tests
 
 The experimental [native prequantized W4A16 route](docs/native_nvfp4.md) uses
@@ -107,6 +126,23 @@ support and qualification limits are documented separately.
 pip install -e . pytest
 pytest tests            # the CPU set; two *_gpu tests need a CUDA device and hub access
 ```
+
+## Sources and credit
+
+[FlashRT](https://github.com/flashrt-project/FlashRT) provides the structure
+catalog and native producers; this package owns the host adapters and
+attachment lifecycle. Model and serving ownership remain with
+[RecursiveSI Flint](https://huggingface.co/RecursiveSI/flint) and
+[vLLM](https://github.com/vllm-project/vllm). The optional prefill route adapts
+[SageAttention](https://github.com/thu-ml/SageAttention) through FlashRT, with
+[FlashInfer](https://github.com/flashinfer-ai/flashinfer),
+[CUTLASS](https://github.com/NVIDIA/cutlass) and
+[Triton](https://github.com/triton-lang/triton) primitives. Native source and
+license notices are maintained in the
+[producer's vendor record](https://github.com/flashrt-project/FlashRT/blob/feat/flint-w4a8-sm120/csrc/sage2/VENDOR.md).
+The Flint benchmark corpus comes from [llama.cpp](https://github.com/ggml-org/llama.cpp);
+vLLM is the executor baseline for those measurements. For FlashRT's paper
+citation, see the [upstream citation section](https://github.com/flashrt-project/FlashRT#citation).
 
 ## License
 
