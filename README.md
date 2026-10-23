@@ -104,14 +104,19 @@ operators for NVFP4/W4A8 projections, FFNs and paged attention. vLLM manages
 scheduling and KV allocation. Setup requires separately built FlashRT
 artifacts and the pinned vLLM patch linked below.
 
-Decode throughput on RTX 5090, with matched FP8 KV and graph policy;
-steady engine-step wall timing. **vLLM** is the same pinned/patched build
-with FlashRT acceleration disabled; **vLLM + FlashRT** enables it.
+Decode measurements on RTX 5090, using a paired vLLM baseline for each row:
 
-| 1,022-token prompt | vLLM | vLLM + FlashRT | Speedup |
-|---|---:|---:|---:|
-| Batch 1 | 275.7 tok/s | **530.7 tok/s** | **1.93×** |
-| Batch 8 | 1460.9 tok/s | **1613.1 tok/s** | **1.10×** |
+| 1,022-token prompt | vLLM | vLLM + FlashRT | Speedup | Record |
+|---|---:|---:|---:|---|
+| Batch 1 | 275.7 tok/s | **530.7 tok/s** | **1.93×** | Current-build FP8 KV |
+| Batch 8 | 1417 tok/s | **1715 tok/s** | **1.21× (+21%)** | Historical BF16 KV |
+
+**Batch 8: up to 21% in the historical paired measurement**, recorded
+2026-10-23 with an earlier build on a different RTX 5090 system: BF16 KV,
+memory utilization 0.94, 256 output tokens, maximum 64 sequences. This is not
+a current-build remeasurement. The batch-1 row uses the 2026-10-24 FP8 KV
+protocol. The guide keeps both records, their configurations and the
+current-build batch-8 comparison separate.
 
 [Setup, batch 1–8 measurements and limits](docs/flint_vllm.md) ·
 [FlashRT operator ownership](docs/native_nvfp4.md).

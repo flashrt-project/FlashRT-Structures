@@ -104,7 +104,23 @@ the packed K-FP8/V-FP4 cache, fake quantization, per-32 weight requantization
 or diagnostics when reproducing the FP8-KV tables. Those research modes are
 not qualified by this cell. Dynamic/non-unit KV scales are unsupported here.
 
-## Performance protocol
+## Historical batch-8 decode result
+
+An earlier paired measurement on RTX 5090 recorded **up to 21% higher batch-8
+decode throughput (1.21×)** with FlashRT:
+
+| Prompt tokens/request | Batch | vLLM (tok/s) | vLLM + FlashRT (tok/s) | Speedup | Throughput gain |
+|---:|---:|---:|---:|---:|---:|
+| 1,022 | 8 | 1417 | **1715** | **1.21×** | +21.0% |
+
+Historical record: 2026-10-23, BF16 KV, GPU memory utilization 0.94, 256 output
+tokens per request, maximum 64 sequences. Each speedup uses its paired vLLM
+baseline. This observation used an earlier development build on a different
+RTX 5090 system from the current-build measurements below. It is a historical
+result, not a remeasurement or performance qualification of the current PR
+head; results vary across systems and runs.
+
+## Current-build performance protocol
 
 Measured 2026-10-24 (UTC+8), using the same built artifacts and identical
 distinct public llama.cpp token windows within each pair. Each arm uses a fresh
@@ -130,10 +146,21 @@ only the FlashRT acceleration switches differ.
 | Prompt tokens/request | Batch | vLLM (tok/s) | vLLM + FlashRT (tok/s) | Speedup | Throughput gain |
 |---:|---:|---:|---:|---:|---:|
 | 1,022 | 1 | 275.7 | **530.7** | **1.93×** | +92.5% |
-| 1,022 | 8 | 1460.9 | **1613.1** | **1.10×** | +10.4% |
 | 32,768 | 1 | 253.6 | **408.9** | **1.61×** | +61.2% |
 | 24,998–32,768 | 4 | 728.1 | **799.4** | **1.10×** | +9.8% |
 | 99,986 | 1 | 217.3 | **332.0** | **1.53×** | +52.7% |
+
+<details>
+<summary>Current-build batch-8 comparison (FP8 KV)</summary>
+
+| Prompt tokens/request | Batch | vLLM (tok/s) | vLLM + FlashRT (tok/s) | Speedup | Throughput gain |
+|---:|---:|---:|---:|---:|---:|
+| 1,022 | 8 | 1460.9 | **1613.1** | **1.10×** | +10.4% |
+
+This is the current-build result under the FP8 KV protocol stated above;
+it is separate from the historical BF16 KV measurement.
+
+</details>
 
 ### Prefill
 
