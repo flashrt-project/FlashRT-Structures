@@ -503,6 +503,38 @@ def _install_native_decode_attention(model, api):
     from vllm.v1.attention.backends.flashinfer import FlashInferMetadata
 
     max_seqs = int(os.environ.get("FLASHRT_NATIVE_ATTN_MAX", "8"))
+    _FAKE_ATTN_FP8 = int(os.environ.get("FLASHRT_NATIVE_FAKE_ATTN_FP8", "0"))
+
+    def _single_prompt(self):
+        md = get_forward_context().attn_metadata
+        md = md.get(self.attn.layer_name) if isinstance(md, dict) else md
+        return md is not None and getattr(md, "num_prefills", 0) == 1 and getattr(md, "num_decodes", 0) == 0 \
+            and getattr(md, "num_prefill_tokens", 0) == getattr(md, "num_actual_tokens", -1)
+
+    def _torch_attn_fp8p(self, q, k, v, out, T):
+        Hq, Hk, D = self.num_heads, self.num_kv_heads, self.head_dim
+        qh = q.reshape(T, Hq, D).float().transpose(0, 1)                  # [Hq, T, D]
+        kh = k.reshape(T, Hk, D).float().transpose(0, 1).repeat_interleave(Hq // Hk, 0)
+        vh = v.reshape(T, Hk, D).float().transpose(0, 1).repeat_interleave(Hq // Hk, 0)
+        scale = float(D) ** -0.5
+        left = self.impl.window_left
+        sinks = self.impl.sinks
+        pos = torch.arange(T, device=q.device)
+        o = out.reshape(T, Hq, D)
+        for r0 in range(0, T, 256):
+            r1 = min(T, r0 + 256)
+            s = torch.einsum("hqd,hkd->hqk", qh[:, r0:r1], kh) * scale            # [Hq, R, T]
+            mask = pos[None, :] > pos[r0:r1, None]
+            if left >= 0:
+                mask |= pos[None, :] <= pos[r0:r1, None] - (left + 1)
+            s = s.masked_fill(mask[None], float("-inf"))
+            m = s.amax(-1, keepdim=True)
+            if sinks is not None:
+                m = torch.maximum(m, sinks.view(-1, 1, 1).float())
+            p = torch.exp(s - m)
+            den = p.sum(-1, keepdim=True) + (torch.exp(sinks.view(-1, 1, 1).float() - m) if sinks is not None else 0)
+            p8 = (p * 448.0).to(torch.float8_e4m3fn).float() / 448.0
+            o[r0:r1] = (torch.einsum("hqk,hkd->hqd", p8, vh) / den).transpose(0, 1).to(out.dtype)
     # FLASHRT_NATIVE_KV_V4=1 (opt-in, fp8 KV cache only): keep an NVFP4 shadow of V (codes + per-16 E4M3 scales)
     # beside the fp8 cache; every cache write also fills it (Triton writer on the host paths, the fused kernel on
     # ours) and the native decode attention reads K fp8 + V fp4 (200 instead of 256 bytes per token and head).
@@ -653,6 +685,31 @@ def _install_native_decode_attention(model, api):
         else:
             attn_output = torch.empty_like(q)
             _, k, v = qkv.split([self.q_size, self.kv_size, self.kv_size], dim=-1)
+            if _FAKE_ATTN_FP8 and num_tokens >= 64:
+                # study: FP8 (E4M3) prefill attention operands; the cache write already happened.
+                # mode 1: per token-head absmax for q/k/v (optimistic); mode 2: q/k per token-head, v per
+                # (128-token block, head, dim) = what an FP8 PV mma can factor out of the reduction
+                def _fq(t, h):
+                    tf = t.reshape(num_tokens, h, self.head_dim).float()
+                    sc = tf.abs().amax(-1, keepdim=True) / 448.0
+                    sc = torch.where(sc > 0, sc, torch.ones_like(sc))
+                    return ((tf / sc).to(torch.float8_e4m3fn).float() * sc).reshape(t.shape).to(t.dtype)
+                def _fqv(t, h):
+                    tf = t.reshape(num_tokens, h, self.head_dim).float()
+                    nb = (num_tokens + 127) // 128
+                    pad = nb * 128 - num_tokens
+                    tp = torch.nn.functional.pad(tf, (0, 0, 0, 0, 0, pad)).reshape(nb, 128, h, self.head_dim)
+                    sc = tp.abs().amax(1, keepdim=True) / 448.0
+                    sc = torch.where(sc > 0, sc, torch.ones_like(sc))
+                    out = ((tp / sc).to(torch.float8_e4m3fn).float() * sc).reshape(nb * 128, h, self.head_dim)[:num_tokens]
+                    return out.reshape(t.shape).to(t.dtype)
+                q = _fq(q, self.num_heads); k = _fq(k, self.num_kv_heads)
+                v = _fqv(v, self.num_kv_heads) if _FAKE_ATTN_FP8 >= 2 else _fq(v, self.num_kv_heads)
+            if _FAKE_ATTN_FP8 == 3 and num_tokens >= 64 and _single_prompt(self):
+                # mode 3: also the probabilities in E4M3 (P * 448, the mma operand of an FP8 PV): torch attention
+                # over the chunk (single-chunk prompts only), replaces the FA2 call
+                _torch_attn_fp8p(self, q, k, v, attn_output, num_tokens)
+                return attn_output
             unified_attention_with_output(
                 q.view(num_tokens, self.num_heads, self.head_dim),
                 k.view(num_tokens, self.num_kv_heads, self.head_dim),
