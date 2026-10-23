@@ -1,7 +1,7 @@
 # Flint: vLLM + FlashRT on RTX 5090
 
 This experimental, opt-in integration runs RecursiveSI Flint's official NVFP4
-checkpoint inside vLLM using separately built FlashRT producers. It covers
+checkpoint inside vLLM using the independent `flashrt-structures-flint` operator backend. It covers
 batch-one latency and small decode batches (the reported range is 1–8).
 vLLM retains its scheduler, graph policy, KV allocation and request protocol.
 It is separate from FlashRT's standalone Flint frontend and from the normal
@@ -16,7 +16,7 @@ Hub-backed Structures route.
 | vLLM build | vLLM Flint source `aed08d76a682f1475957c0730ea1f5ecb150fda0`, matching vLLM 0.32.0 CUDA binary payload, plus the checked-in host patch |
 | Dependencies | FlashInfer 0.7.2, Transformers 5.20.2, tokenizers 0.23.3 |
 | Model | `RecursiveSI/flint-nvfp4-gguf`; BF16 activations, FP8 KV with unit host scales |
-| Producer | FlashRT `flash_rt_flint` plus the optional prebuilt Sage2 module |
+| Operator backend | `flashrt-structures-flint` 0.1.0; independent CUDA/Triton and Sage2 artifacts |
 | Consumer | This package's explicit `flashrt_native` vLLM plugin; default OFF |
 
 This source/binary combination is the measured development cell, not a claim
@@ -44,10 +44,22 @@ cross-family topology recognition does not certify another model's GPU path.
 
 ## Install
 
-First build and install the paired
-[FlashRT producer](https://github.com/flashrt-project/FlashRT/blob/feat/flint-w4a8-sm120/docs/native_nvfp4_api.md).
-Build Sage2 explicitly before creating a serving engine; the adapter does not
-search a source checkout or compile kernels at inference time.
+Build and install the independent [Flint operator backend](../backends/flint/README.md)
+from this repository. It owns the Tensor API, quantization/packing, CUDA/Triton,
+Sage2 and vLLM execution composition. Both native modules are built into its
+own wheel, outside the core Structures installation. FlashRT supplies the
+catalog and retains the standalone frontend; no compiled FlashRT module is
+needed by this vLLM route.
+
+```bash
+# First install the matching CUDA-enabled PyTorch, Triton, setuptools, wheel and Ninja.
+TORCH_CUDA_ARCH_LIST=12.0a MAX_JOBS=2 \
+  python -m pip wheel --no-build-isolation --no-deps ./backends/flint -w dist
+python -m pip install --no-deps dist/flashrt_structures_flint-*.whl
+```
+
+The adapter resolves this installed artifact before tracing. It does not search
+a kernel source checkout or compile during import, engine creation or forward.
 
 The host patch supplies FP8 KV writes, the LSE/sink prefill path and its
 Sage2 dispatch. It is restricted to Flint's model/attention files. Apply it to
@@ -103,7 +115,7 @@ no speculative/resident loop and one sequential execution lane. Do not enable
 diagnostics when reproducing the FP8-KV tables. Experimental NVFP4 shadow or
 packed KV caches, fake attention/KV quantization and per-32 weight requantization
 are not included in this integration; their old switches explicitly refuse.
-Quantization, packing and compute kernels belong to the FlashRT producer.
+Quantization, packing and compute kernels belong to the independent Flint backend.
 Dynamic/non-unit KV scales are unsupported here.
 
 ## Historical batch-8 decode result
@@ -239,14 +251,15 @@ the selected path; no cross-model, SGLang or other-GPU performance is claimed.
 
 - [RecursiveSI Flint](https://huggingface.co/RecursiveSI/flint) and the
   [official NVFP4 GGUF](https://huggingface.co/RecursiveSI/flint-nvfp4-gguf): model, tokenizer and checkpoint.
-- [FlashRT](https://github.com/flashrt-project/FlashRT): compute operators and catalog;
-  [FlashRT Structures](https://github.com/flashrt-project/FlashRT-Structures): host integration.
+- [FlashRT](https://github.com/flashrt-project/FlashRT): catalog and original standalone kernels;
+  [FlashRT Structures](https://github.com/flashrt-project/FlashRT-Structures): host integration and
+  the separately distributed [Flint operator backend](../backends/flint/README.md).
 - [vLLM](https://github.com/vllm-project/vllm): host engine and pinned Flint model implementation;
   [source installation](https://docs.vllm.ai/en/latest/contributing/code/) documents precompiled-wheel builds.
 - [SageAttention](https://github.com/thu-ml/SageAttention),
   [FlashInfer](https://github.com/flashinfer-ai/flashinfer),
   [CUTLASS](https://github.com/NVIDIA/cutlass) and
   [Triton](https://github.com/triton-lang/triton): attention and quantized compute primitives.
-  Adapted kernel sources retain their original notices in FlashRT's `csrc/sage2`.
+  Adapted sources retain their notices in the [backend vendor record](../backends/flint/flashrt_structures_flint/csrc/sage2/VENDOR.md).
 - [llama.cpp](https://github.com/ggml-org/llama.cpp): public MIT-licensed code corpus for input fixtures;
   it is not the executor baseline in these vLLM measurements.

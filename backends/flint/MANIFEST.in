@@ -1,0 +1,5 @@
+recursive-include flashrt_structures_flint/csrc *
+include LICENSE README.md NOTICE sources.json
+recursive-include docs *.md
+recursive-include tests *.py
+include AGENTS.md

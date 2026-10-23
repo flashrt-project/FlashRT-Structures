@@ -48,7 +48,10 @@ class LinearProjNative(GuardedSeam, torch.nn.Module):
 
 
 def bind_packed(matrix, original, *, capacity=8192):
-    from flash_rt.native_kernels.nvfp4 import Linear
+    from ...backends.flint import load_module
+
+    api = load_module()
+    Linear = api.Linear
 
     bound = Linear(matrix)
     bound(torch.zeros((1, matrix.k), dtype=torch.bfloat16, device=matrix.codes.device))

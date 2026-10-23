@@ -1,9 +1,8 @@
-"""Host-facing aliases for the separately built FlashRT Sage2 Tensor artifact.
+"""Resolve Sage2 once when the optional adapter is explicitly attached."""
 
-The native producer owns build, device qualification and computation. This
-consumer never locates sources or compiles kernels inside the serving engine.
-"""
+from ..backends.flint import load_module
 
-from flash_rt.native_kernels.sage2 import attention_fp8, gather_pages_bf16, load as ops
-
-__all__ = ["attention_fp8", "gather_pages_bf16", "ops"]
+_backend = load_module("sage2")
+attention_fp8 = _backend.attention_fp8
+gather_pages_bf16 = _backend.gather_pages_bf16
+ops = _backend.load

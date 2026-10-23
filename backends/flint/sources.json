@@ -1,0 +1,194 @@
+{
+  "flashrt_structures_flint/__init__.py": {
+    "repository": "flashrt-project/FlashRT",
+    "revision": "6b547be90d032f42876f6265e181df57c299b971",
+    "path": "flash_rt/native_kernels/__init__.py",
+    "sha256": "0548e92eb78a80884c9b4c7c02834304ab0acfc9053639ef6075da31e3c499fd"
+  },
+  "flashrt_structures_flint/dense_fp8.py": {
+    "repository": "flashrt-project/FlashRT",
+    "revision": "6b547be90d032f42876f6265e181df57c299b971",
+    "path": "flash_rt/native_kernels/dense_fp8.py",
+    "sha256": "42eb31e87b416b39a9fb3115d803ee55716d91cd745a41f0fd6c49ba8691dcf1"
+  },
+  "flashrt_structures_flint/sage2.py": {
+    "repository": "flashrt-project/FlashRT",
+    "revision": "6b547be90d032f42876f6265e181df57c299b971",
+    "path": "flash_rt/native_kernels/sage2.py",
+    "sha256": "173c749ff6f2b0cc12f2c21cd261067e8d054b777681336fd193d395edb68485"
+  },
+  "flashrt_structures_flint/nvfp4.py": {
+    "repository": "flashrt-project/FlashRT",
+    "revision": "6b547be90d032f42876f6265e181df57c299b971",
+    "path": "flash_rt/native_kernels/nvfp4.py",
+    "sha256": "534741d8273a2a660b5df140ef6c753cddd612c9545b60cea07c0d7b7b6ef770"
+  },
+  "flashrt_structures_flint/fp4_moe.py": {
+    "repository": "flashrt-project/FlashRT",
+    "revision": "6b547be90d032f42876f6265e181df57c299b971",
+    "path": "flash_rt/native_kernels/fp4_moe.py",
+    "sha256": "a0831e6794251b8ed7898f0f1858d9e2a01edb61242870a8aa75802c8065c849"
+  },
+  "flashrt_structures_flint/csrc/sage2/VENDOR.md": {
+    "repository": "flashrt-project/FlashRT",
+    "revision": "6b547be90d032f42876f6265e181df57c299b971",
+    "path": "csrc/sage2/VENDOR.md",
+    "sha256": "b0381780fa72adc5e313c213acf02d9b96cf811d1c6b79d2b3e151ed08e764be"
+  },
+  "flashrt_structures_flint/csrc/sage2/NOTICE": {
+    "repository": "flashrt-project/FlashRT",
+    "revision": "6b547be90d032f42876f6265e181df57c299b971",
+    "path": "csrc/sage2/NOTICE",
+    "sha256": "c971ec91bf8d72bda6cf4fd829d239df6499855424960867b755dd86c16dd501"
+  },
+  "flashrt_structures_flint/csrc/sage2/LICENSE": {
+    "repository": "flashrt-project/FlashRT",
+    "revision": "6b547be90d032f42876f6265e181df57c299b971",
+    "path": "csrc/sage2/LICENSE",
+    "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+  },
+  "flashrt_structures_flint/csrc/sage2/csrc/sage2_blackwell.cu": {
+    "repository": "flashrt-project/FlashRT",
+    "revision": "6b547be90d032f42876f6265e181df57c299b971",
+    "path": "csrc/sage2/csrc/sage2_blackwell.cu",
+    "sha256": "d6e8cf7392df5cac3639053df1503de8ab85bb3be9b5cd81f4a543ab007ef18b"
+  },
+  "flashrt_structures_flint/csrc/sage2/csrc/cp_async.cuh": {
+    "repository": "flashrt-project/FlashRT",
+    "revision": "6b547be90d032f42876f6265e181df57c299b971",
+    "path": "csrc/sage2/csrc/cp_async.cuh",
+    "sha256": "340f1613069ca37f0918db8c8303a3f1705390c430894542f4447a60726eeabd"
+  },
+  "flashrt_structures_flint/csrc/sage2/csrc/math.cuh": {
+    "repository": "flashrt-project/FlashRT",
+    "revision": "6b547be90d032f42876f6265e181df57c299b971",
+    "path": "csrc/sage2/csrc/math.cuh",
+    "sha256": "35e1f66ec4f2b975089206735c682966ff77f2207578c84fb38c1ef0d928189e"
+  },
+  "flashrt_structures_flint/csrc/sage2/csrc/numeric_conversion.cuh": {
+    "repository": "flashrt-project/FlashRT",
+    "revision": "6b547be90d032f42876f6265e181df57c299b971",
+    "path": "csrc/sage2/csrc/numeric_conversion.cuh",
+    "sha256": "24f5b215cd7b9b21f0f3427728e1969634a15daf3965d7408f6554737d48fac0"
+  },
+  "flashrt_structures_flint/csrc/sage2/csrc/sage2_blackwell.cuh": {
+    "repository": "flashrt-project/FlashRT",
+    "revision": "6b547be90d032f42876f6265e181df57c299b971",
+    "path": "csrc/sage2/csrc/sage2_blackwell.cuh",
+    "sha256": "2d706f255d0b6bf8361cbbb9dd5af22810115adc74c7da1aa8d9276f37048dd5"
+  },
+  "flashrt_structures_flint/csrc/sage2/csrc/mma.cuh": {
+    "repository": "flashrt-project/FlashRT",
+    "revision": "6b547be90d032f42876f6265e181df57c299b971",
+    "path": "csrc/sage2/csrc/mma.cuh",
+    "sha256": "d88147bbeb12c5722b620551477d9b8715799f6ed57f05c4e3fab289d2aac682"
+  },
+  "flashrt_structures_flint/csrc/sage2/csrc/registration.h": {
+    "repository": "flashrt-project/FlashRT",
+    "revision": "6b547be90d032f42876f6265e181df57c299b971",
+    "path": "csrc/sage2/csrc/registration.h",
+    "sha256": "4de6806c3d18b3b6421ed8a4b3e50e1308e9963721a4b93ea30a8419a84c0e79"
+  },
+  "flashrt_structures_flint/csrc/sage2/csrc/permuted_smem.cuh": {
+    "repository": "flashrt-project/FlashRT",
+    "revision": "6b547be90d032f42876f6265e181df57c299b971",
+    "path": "csrc/sage2/csrc/permuted_smem.cuh",
+    "sha256": "73c8bfca1742bbc7f971db79ab451df907bc59944616b1679ab446c87f7fc1a6"
+  },
+  "flashrt_structures_flint/csrc/sage2/torch-ext/torch_binding.cpp": {
+    "repository": "flashrt-project/FlashRT",
+    "revision": "6b547be90d032f42876f6265e181df57c299b971",
+    "path": "csrc/sage2/torch-ext/torch_binding.cpp",
+    "sha256": "83f61b8fa6e38d87f6c455afd459f42eee16075d98429b1eef2ab11e96e6de97"
+  },
+  "flashrt_structures_flint/csrc/sage2/csrc/qattn/qk_int_sv_f16_core.cuh": {
+    "repository": "flashrt-project/FlashRT",
+    "revision": "6b547be90d032f42876f6265e181df57c299b971",
+    "path": "csrc/sage2/csrc/qattn/qk_int_sv_f16_core.cuh",
+    "sha256": "4eb7c60bee89954b5d17f6c0028dcb3d562ae8b5f3e11e6415c1359b40d2494d"
+  },
+  "flashrt_structures_flint/csrc/sage2/csrc/qattn/qk_int_sv_f8_core.cuh": {
+    "repository": "flashrt-project/FlashRT",
+    "revision": "6b547be90d032f42876f6265e181df57c299b971",
+    "path": "csrc/sage2/csrc/qattn/qk_int_sv_f8_core.cuh",
+    "sha256": "944c469dfbb70377ee8971cca097fe1a7a7d8ba8485dac033b9476c42ccfdb5c"
+  },
+  "flashrt_structures_flint/csrc/sage2/csrc/qattn/attn_utils.cuh": {
+    "repository": "flashrt-project/FlashRT",
+    "revision": "6b547be90d032f42876f6265e181df57c299b971",
+    "path": "csrc/sage2/csrc/qattn/attn_utils.cuh",
+    "sha256": "f0017384315f87242e3c560b3520c0647661089b36d2e29f580ee8d850a364be"
+  },
+  "flashrt_structures_flint/csrc/flint/flint_common.cuh": {
+    "repository": "flashrt-project/FlashRT",
+    "revision": "6b547be90d032f42876f6265e181df57c299b971",
+    "path": "csrc/kernels/flint/flint_common.cuh",
+    "sha256": "c9c97e34313e33a445887272e6bcfbfddce6cd13a029b098c37fd80e29fd7a4e"
+  },
+  "flashrt_structures_flint/csrc/flint/flint_kernels.cuh": {
+    "repository": "flashrt-project/FlashRT",
+    "revision": "6b547be90d032f42876f6265e181df57c299b971",
+    "path": "csrc/kernels/flint/flint_kernels.cuh",
+    "sha256": "d41a69ac9bb70fc129c4188057b95e9bdfd1b5b84d2ebeec42d0c2f4fe09f6be"
+  },
+  "flashrt_structures_flint/csrc/flint/flint_decode.cu": {
+    "repository": "flashrt-project/FlashRT",
+    "revision": "6b547be90d032f42876f6265e181df57c299b971",
+    "path": "csrc/kernels/flint/flint_decode.cu",
+    "sha256": "165aa22fdd72213ac26f926e2c05e9111eb8f38ff7ce4bc5c145fb06f112d636"
+  },
+  "flashrt_structures_flint/csrc/flint/flint_decode_fused.cu": {
+    "repository": "flashrt-project/FlashRT",
+    "revision": "6b547be90d032f42876f6265e181df57c299b971",
+    "path": "csrc/kernels/flint/flint_decode_fused.cu",
+    "sha256": "38115c00d0e1f1eeaef4719dc655992a25226ae88ae4d6a71593af994480da69"
+  },
+  "flashrt_structures_flint/csrc/flint/flint_gemm.cu": {
+    "repository": "flashrt-project/FlashRT",
+    "revision": "6b547be90d032f42876f6265e181df57c299b971",
+    "path": "csrc/kernels/flint/flint_gemm.cu",
+    "sha256": "db8684f4fa55b7ee7a5529565525274fb0546e87e7490ab6abb5486d4c82a833"
+  },
+  "flashrt_structures_flint/csrc/flint/flint_gemm_s8.cu": {
+    "repository": "flashrt-project/FlashRT",
+    "revision": "6b547be90d032f42876f6265e181df57c299b971",
+    "path": "csrc/kernels/flint/flint_gemm_s8.cu",
+    "sha256": "7fc71702118d620311cd61aa90fb17d18b27e94101b820186fed2fb70cd627f7"
+  },
+  "flashrt_structures_flint/csrc/flint/flint_gemv_mma.cu": {
+    "repository": "flashrt-project/FlashRT",
+    "revision": "6b547be90d032f42876f6265e181df57c299b971",
+    "path": "csrc/kernels/flint/flint_gemv_mma.cu",
+    "sha256": "e3b74f098df991c505c29b2ae611c77821bdd9adbe3815810e5ed0d18a3955cf"
+  },
+  "flashrt_structures_flint/csrc/flint/flint_gemm_stream.cu": {
+    "repository": "flashrt-project/FlashRT",
+    "revision": "6b547be90d032f42876f6265e181df57c299b971",
+    "path": "csrc/kernels/flint/flint_gemm_stream.cu",
+    "sha256": "29e60321cac04611e2a0fec4b04475abc915bd92f69447b6f535a30eb569bf4c"
+  },
+  "flashrt_structures_flint/csrc/flint/flint_gemm_resident.cu": {
+    "repository": "flashrt-project/FlashRT",
+    "revision": "6b547be90d032f42876f6265e181df57c299b971",
+    "path": "csrc/kernels/flint/flint_gemm_resident.cu",
+    "sha256": "b2164385cb344827dc21d36738459594998cb08d981b63b7043c52f83bb95b1a"
+  },
+  "flashrt_structures_flint/csrc/flint/flint_gemm_s8r.cu": {
+    "repository": "flashrt-project/FlashRT",
+    "revision": "6b547be90d032f42876f6265e181df57c299b971",
+    "path": "csrc/kernels/flint/flint_gemm_s8r.cu",
+    "sha256": "141f0b4a65abfa2f7c1f581c7a09cfc66d629bf9b34a1413742f90431fa779fa"
+  },
+  "flashrt_structures_flint/csrc/flint/flint_attention_paged.cu": {
+    "repository": "flashrt-project/FlashRT",
+    "revision": "6b547be90d032f42876f6265e181df57c299b971",
+    "path": "csrc/kernels/flint/flint_attention_paged.cu",
+    "sha256": "849a6ba9c4519f4bc283f7985dd8ca4f72009c9ee0f5065e65a3e73569e1470d"
+  },
+  "flashrt_structures_flint/csrc/flint/flint_prefill.cu": {
+    "repository": "flashrt-project/FlashRT",
+    "revision": "6b547be90d032f42876f6265e181df57c299b971",
+    "path": "csrc/kernels/flint/flint_prefill.cu",
+    "sha256": "b00e96a8e0b03b73f8643e7436fbc0329955d3283d5591951769d9078ddc5a3f"
+  }
+}

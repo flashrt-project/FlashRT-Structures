@@ -1,0 +1,14 @@
+Flint operator backend for FlashRT Structures
+
+CUDA support and Tensor implementation adapted from FlashRT, Apache-2.0,
+at the exact public revisions and paths recorded in sources.json.
+Shared support is a pinned dependency snapshot for an independent binary;
+canonical standalone CUDA files remain in FlashRT and are not moved.
+Backend changes are maintained here; updates must refresh provenance and tests.
+
+SageAttention-derived sources, FlashInfer and vLLM helper attribution and
+applicable notices are preserved in flashrt_structures_flint/csrc/sage2.
+Flint model/checkpoint ownership remains with RecursiveSI. vLLM owns the host
+engine and optional prefill CUDA operators. CUTLASS and Triton retain their
+upstream ownership and licenses. This package does not claim authorship of
+the retained upstream code.

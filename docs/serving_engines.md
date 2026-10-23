@@ -1,5 +1,11 @@
 # Attaching structures to a serving engine
 
+The Flint opt-in route uses the separately built
+[`flashrt-structures-flint` operator backend](../backends/flint/README.md).
+It owns its CUDA/Triton and Tensor API; core adapters own binding and lifecycle.
+See [Flint on vLLM](flint_vllm.md) for its distinct setup and qualified host patch.
+The Hub-backed routes below retain their existing installation and behavior.
+
 A model library is a friendly host: you own the module tree and can put
 anything anywhere. A serving engine is not. It owns its own model
 implementation, its own memory planner and its own graph capture, and it
@@ -29,7 +35,7 @@ things follow:
 - The native `flash_rt.load_model` path is a different thing entirely and
   needs a local build. See the README's Build section.
 
-An explicitly installed native Tensor artifact can also serve prequantized
+The explicitly installed Flint operator backend can also serve prequantized
 regions through the same load/attach lifecycle. This experimental opt-in route
 is documented in [FlashRT prequantized W4A16 integration](native_nvfp4.md),
 including its separate build, qualification and refusal requirements.

@@ -57,7 +57,11 @@ def bind_packed(
     *,
     capacity=8192,
 ):
-    from flash_rt.native_kernels.nvfp4 import RoutedSharedFfn, workspace_shapes
+    from ...backends.flint import load_module
+
+    api = load_module()
+    RoutedSharedFfn = api.RoutedSharedFfn
+    workspace_shapes = api.workspace_shapes
 
     # Scratch is shared only across sequential layers. Returned model outputs
     # are allocated by the op and never alias this pool. Counter buffers are

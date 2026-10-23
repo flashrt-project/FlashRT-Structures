@@ -9,6 +9,32 @@ like. Follow it literally. When unsure, stop and ask; do not guess.
 
 ---
 
+## Optional operator backend ownership
+
+The kernel-free rule applies to the core `flashrt_structures/` consumer.
+This repository also maintains the explicitly separate producer distribution
+[`flashrt-structures-flint`](backends/flint/README.md) in `backends/flint/`.
+That package owns its Tensor API, CUDA/Triton kernels, quantization, packing,
+shape dispatch, Sage2 and Flint/vLLM execution composition. This is an explicit
+exception to the previous repository-wide prohibition on kernel source.
+
+It has its own build metadata, native modules, operator namespaces, provenance
+and tests. Core installation must neither build nor require it. Consumers
+resolve the installed artifact at bind time and retain discovery, guards,
+WeightStore, lifecycle, ledger and rollback. No private source injection or
+inference-time compilation is allowed. Hardware support belongs to backend
+metadata; no duplicate architecture policy is added to core implementations.
+Missing artifacts refuse clearly. Existing standalone Flint CUDA kernels stay
+in FlashRT; shared backend support is an attributed, pinned source snapshot.
+
+Backend changes require independent source-package/wheel builds, CPU ABI/device
+refusals, GPU arithmetic and changed-input capture tests, and relevant real-host
+correctness. Changes to algorithms, precision or dispatch require paired
+performance/quality qualification. A migration must compare the old and new
+artifact at the same inputs and preserve standalone frontend regressions.
+This exception does not license kernels in core adapters, impls or catalog
+specifications, nor bypass other producer packages' ownership or release gates.
+
 ## 0. Required reading, in order
 
 | Document | What you take from it |
@@ -67,7 +93,7 @@ The following stages are mandatory and may not be reordered:
    - standalone correctness, compile, capture, and E2E acceptance
      gates.
 
-   The structures worker must not patch `FlashRT-HF-kernels`, native
+   For externally owned dependencies, the structures worker must not patch `FlashRT-HF-kernels`, native
    kernel sources, bindings, build files, package metadata, fake
    registrations, or kernel-package documentation. It must not inject
    a source checkout into a host to manufacture an artifact. Kernel
@@ -356,7 +382,8 @@ adapter pins are the copyable precedent.
    side effects in the hot path, no loader calls, one custom-op call.
 7. Every API mentioned in docs or a PR description is checked against
    the source signature before it is written down.
-8. **Kernel ownership is strict.** Structures work may inspect and
+8. **Kernel ownership is strict.** The optional backend exception above
+   applies only to its own distribution. Core Structures work may inspect and
    report a kernel-package gap, but it may not implement, repair,
    package, publish, or validate that package on the kernel owner's
    behalf. A local kernel edit is not a delivered dependency.

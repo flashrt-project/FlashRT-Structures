@@ -38,7 +38,10 @@ class DecoderFfnNative(GuardedSeam, torch.nn.Module):
 
 
 def bind_packed(gate_up, down, original, *, capacity=8192):
-    from flash_rt.native_kernels.nvfp4 import DenseFfn
+    from ...backends.flint import load_module
+
+    api = load_module()
+    DenseFfn = api.DenseFfn
 
     bound = DenseFfn(gate_up, down)
     bound(

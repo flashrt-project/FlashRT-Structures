@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 torch = pytest.importorskip("torch")
-from flashrt_structures.adapters import vllm_native as adapter
+from flashrt_structures_flint import vllm as adapter
 
 
 @pytest.mark.parametrize("fused", [False, True])
@@ -92,11 +92,11 @@ def test_attention_routes_without_consumer_quantization(
     monkeypatch.setenv("FLASHRT_NATIVE_ATTN_MAX_FP8", "8")
     model = torch.nn.Module()
     model.attention = Attention()
-    changes = adapter._AttributeChanges()
+    changes = _Changes()
     api = SimpleNamespace(
         _decode_attention_qkv=producer("fused"), _decode_attention=producer("decode")
     )
-    adapter._install_native_decode_attention(model, api, changes)
+    adapter.install_decode_attention(model, api, changes)
     output = model.attention._native_attention_core(
         torch.arange(tokens), torch.zeros((tokens, 12), dtype=torch.bfloat16)
     )
@@ -111,3 +111,21 @@ def test_attention_routes_without_consumer_quantization(
     changes.restore()
     assert not hasattr(model.attention, "_native_attention_core")
     assert not hasattr(model.attention, "_native_decode_plan")
+
+
+class _Changes:
+    def __init__(self):
+        self.undo = []
+
+    def set(self, obj, name, value):
+        own, previous = name in vars(obj), getattr(obj, name, None)
+        self.undo.append((obj, name, own, previous))
+        setattr(obj, name, value)
+
+    def restore(self):
+        for obj, name, own, previous in reversed(self.undo):
+            if own:
+                setattr(obj, name, previous)
+            else:
+                delattr(obj, name)
+        self.undo.clear()

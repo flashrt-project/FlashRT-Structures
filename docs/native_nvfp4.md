@@ -1,11 +1,14 @@
 # FlashRT prequantized W4A16 integration (development)
 
-This integration uses separately built FlashRT Tensor operators in vLLM.
-It does not use the HF kernel client or inject a kernel source checkout into
-the host. Build and qualify `flash_rt.native_kernels.nvfp4` first, install
-its Python package and native binary into the same environment, then install
-this Structures branch. See the producer's `docs/native_nvfp4_api.md` for the
-artifact ABI, capabilities, packing and standalone qualification.
+This opt-in vLLM integration consumes `flashrt-structures-flint`, an independent
+operator distribution maintained under [`backends/flint/`](../backends/flint/README.md).
+Build and install its wheel before attaching Structures. Its import package is
+`flashrt_structures_flint`; it owns the Tensor API, quantization/packing,
+CUDA/Triton kernels, Sage2 and vLLM execution composition. Core Structures owns
+discovery, binding and lifecycle. Its default installation does not build or
+require the backend. No compiled FlashRT module or source checkout injection
+is used. See the [backend API](../backends/flint/docs/api.md) for the artifact
+ABI, supported profiles, guards and standalone qualification.
 
 ## Coverage and ownership
 
@@ -75,7 +78,7 @@ attention and layer-level decode composition. These are model host stages,
 not new general structures. They are recorded in `handle.records["native_regions"]`
 outside the per-seam ledger. Original methods and head weights are restored
 on attach failure or pre-capture detach through the same handle and WeightStore.
-The optional Sage2 producer must already be built; no source lookup or kernel
+The optional backend, including Sage2, must already be built; no source lookup or kernel
 compilation occurs in this adapter.
 
 ## Opt-in serving
