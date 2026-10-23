@@ -100,9 +100,11 @@ FLASHRT_STRUCTURES_NATIVE=1 VLLM_PLUGINS=flashrt_native \
 
 The serving recipe uses one tensor/pipeline lane, no expert parallelism,
 no speculative/resident loop and one sequential execution lane. Do not enable
-the packed K-FP8/V-FP4 cache, fake quantization, per-32 weight requantization
-or diagnostics when reproducing the FP8-KV tables. Those research modes are
-not qualified by this cell. Dynamic/non-unit KV scales are unsupported here.
+diagnostics when reproducing the FP8-KV tables. Experimental NVFP4 shadow or
+packed KV caches, fake attention/KV quantization and per-32 weight requantization
+are not included in this integration; their old switches explicitly refuse.
+Quantization, packing and compute kernels belong to the FlashRT producer.
+Dynamic/non-unit KV scales are unsupported here.
 
 ## Historical batch-8 decode result
 

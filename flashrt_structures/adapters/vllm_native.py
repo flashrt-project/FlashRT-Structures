@@ -28,6 +28,23 @@ _INSTALLED = False
 _LOG = logging.getLogger(__name__)
 
 
+def _check_native_options(config=None):
+    """Refuse precision experiments that are outside this consumer integration."""
+    for option in (
+        "FLASHRT_NATIVE_KV_V4",
+        "FLASHRT_NATIVE_PER32",
+        "FLASHRT_NATIVE_FAKE_ATTN_FP8",
+        "FLASHRT_KV_FAKE_NVFP4",
+    ):
+        if os.environ.get(option, "0") not in ("", "0"):
+            raise ValueError(
+                f"{option}: experimental precision mode is not provided by this integration"
+            )
+    cache = getattr(config, "cache_config", None)
+    if getattr(cache, "cache_dtype", None) == "flashrt_kfp8_vfp4":
+        raise ValueError("packed K-FP8/V-FP4 cache is not provided by this integration")
+
+
 class _AttributeChanges:
     """Restore exact instance attributes after a failed attach or before capture."""
 
@@ -118,6 +135,7 @@ class WeightCapture:
 
 @contextmanager
 def capture_weights(runner):
+    _check_native_options(getattr(runner, "vllm_config", None))
     from flash_rt.native_kernels.nvfp4 import load
     from vllm.model_executor.kernels.linear.nvfp4.marlin import MarlinNvFp4LinearKernel
     from vllm.model_executor.layers.quantization.modelopt import ModelOptNvFp4FusedMoE
@@ -298,6 +316,7 @@ def attach_native(model, *, capture=None, capacity=8192):
     bank. The explicit route refuses unsupported forms instead of hot fallback.
     Attention, KV, token control and unqualified fusions remain host-owned.
     """
+    _check_native_options()
     from flash_rt.native_kernels import nvfp4 as api
 
     api.load()
@@ -315,6 +334,7 @@ def attach_native(model, *, capture=None, capacity=8192):
             )
         config = getattr(capture.runner, "vllm_config", None)
         if config is not None:
+            _check_native_options(config)
             p = config.parallel_config
             if p.pipeline_parallel_size != 1 or p.enable_expert_parallel:
                 raise ValueError(
@@ -343,8 +363,6 @@ def attach_native(model, *, capture=None, capacity=8192):
         if interleaved:
             c, s = api.interleave_gate_up(c, s)
         c, s = c.to(device), s.to(device)
-        if _PER32 in ("dense", "all"):
-            c, s = _requant_per32(c, s)
         return api.PackedMatrix(c, s, payload["gs"])
 
     def take(path, module, builder, kind, refresh=None):
@@ -398,9 +416,6 @@ def attach_native(model, *, capture=None, capacity=8192):
                 gc, gs = gc.to(device), gs.to(device)
                 dc = b["down_codes"].reshape(-1, b["down_codes"].shape[-1]).to(device)
                 ds = b["down_scales"].reshape(-1, b["down_scales"].shape[-1]).to(device)
-                if _PER32 == "all":
-                    gc, gs = _requant_per32(gc, gs)
-                    dc, ds = _requant_per32(dc, ds)
                 gu = api.PackedMatrix(gc, gs, 1.0)
                 dn = api.PackedMatrix(dc, ds, 1.0)
                 return routed_impl.bind_packed(
@@ -465,8 +480,6 @@ def attach_native(model, *, capture=None, capacity=8192):
                 _as_tensor(tensor.data).to(device), int(tensor.shape[0])
             )
             codes, scales = codes.contiguous(), scales.view(torch.uint8).contiguous()
-            if _PER32 in ("dense", "all"):
-                codes, scales = _requant_per32(codes, scales)
             head = api.LmHead(api.PackedMatrix(codes, scales, 1.0))
 
             class _NativeHead:
@@ -538,180 +551,34 @@ def _install_native_decode_attention(model, api, changes):
     from vllm.v1.attention.backends.flashinfer import FlashInferMetadata
 
     max_seqs = int(os.environ.get("FLASHRT_NATIVE_ATTN_MAX", "8"))
-    _FAKE_ATTN_FP8 = int(os.environ.get("FLASHRT_NATIVE_FAKE_ATTN_FP8", "0"))
-
-    def _single_prompt(self):
-        md = get_forward_context().attn_metadata
-        md = md.get(self.attn.layer_name) if isinstance(md, dict) else md
-        return (
-            md is not None
-            and getattr(md, "num_prefills", 0) == 1
-            and getattr(md, "num_decodes", 0) == 0
-            and getattr(md, "num_prefill_tokens", 0)
-            == getattr(md, "num_actual_tokens", -1)
-        )
-
-    def _torch_attn_fp8p(self, q, k, v, out, T):
-        Hq, Hk, D = self.num_heads, self.num_kv_heads, self.head_dim
-        qh = q.reshape(T, Hq, D).float().transpose(0, 1)  # [Hq, T, D]
-        kh = k.reshape(T, Hk, D).float().transpose(0, 1).repeat_interleave(Hq // Hk, 0)
-        vh = v.reshape(T, Hk, D).float().transpose(0, 1).repeat_interleave(Hq // Hk, 0)
-        scale = float(D) ** -0.5
-        left = self.impl.window_left
-        sinks = self.impl.sinks
-        pos = torch.arange(T, device=q.device)
-        o = out.reshape(T, Hq, D)
-        for r0 in range(0, T, 256):
-            r1 = min(T, r0 + 256)
-            s = torch.einsum("hqd,hkd->hqk", qh[:, r0:r1], kh) * scale  # [Hq, R, T]
-            mask = pos[None, :] > pos[r0:r1, None]
-            if left >= 0:
-                mask |= pos[None, :] <= pos[r0:r1, None] - (left + 1)
-            s = s.masked_fill(mask[None], float("-inf"))
-            m = s.amax(-1, keepdim=True)
-            if sinks is not None:
-                m = torch.maximum(m, sinks.view(-1, 1, 1).float())
-            p = torch.exp(s - m)
-            den = p.sum(-1, keepdim=True) + (
-                torch.exp(sinks.view(-1, 1, 1).float() - m) if sinks is not None else 0
-            )
-            p8 = (p * 448.0).to(torch.float8_e4m3fn).float() / 448.0
-            o[r0:r1] = (
-                (torch.einsum("hqk,hkd->hqd", p8, vh) / den)
-                .transpose(0, 1)
-                .to(out.dtype)
-            )
-
-    # FLASHRT_NATIVE_KV_V4=1 (opt-in, fp8 KV cache only): keep an NVFP4 shadow of V (codes + per-16 E4M3 scales)
-    # beside the fp8 cache; every cache write also fills it (Triton writer on the host paths, the fused kernel on
-    # ours) and the native decode attention reads K fp8 + V fp4 (200 instead of 256 bytes per token and head).
-    kv_v4 = os.environ.get("FLASHRT_NATIVE_KV_V4", "0") == "1"
-    v4_shadow = None
-    if kv_v4:
-        from .kv_v4 import V4Shadow, v_fp4_write
-        import vllm.models.flint.model as _flint_model
-
-        v4_shadow = V4Shadow()
-        _orig_qk = _flint_model.qk_norm_rope_cache
-
-        def qk_norm_rope_cache_v4(
-            qkv,
-            positions,
-            q_weight,
-            k_weight,
-            eps,
-            cos_sin_cache,
-            k_cache,
-            v_cache,
-            slot_mapping,
-            num_q_heads,
-            num_kv_heads,
-            head_dim,
-            *args,
-            **kwargs,
-        ):
-            q = _orig_qk(
-                qkv,
-                positions,
-                q_weight,
-                k_weight,
-                eps,
-                cos_sin_cache,
-                k_cache,
-                v_cache,
-                slot_mapping,
-                num_q_heads,
-                num_kv_heads,
-                head_dim,
-                *args,
-                **kwargs,
-            )
-            if k_cache is not None and k_cache is not qkv and slot_mapping is not None:
-                codes, scales = v4_shadow.get(k_cache)
-                v_fp4_write(
-                    qkv[:, (num_q_heads + num_kv_heads) * head_dim :],
-                    qkv.stride(0),
-                    slot_mapping,
-                    codes,
-                    scales,
-                    int(k_cache.shape[1]),
-                    num_kv_heads,
-                )
-            return q
-
-        changes.set(_flint_model, "qk_norm_rope_cache", qk_norm_rope_cache_v4)
-        qk_norm_rope_cache = qk_norm_rope_cache_v4
-        _LOG.info("NVFP4 value shadow cache enabled (FLASHRT_NATIVE_KV_V4=1)")
-    # FP8 KV cache: FlashInfer's XQA decode reads the halved pages faster than our paged kernel from 4 sequences
-    # on (C4 1052 vs 967 tok/s, C8 1602 vs 1584), so the native path only keeps the 1-2 sequence cases there.
     max_seqs_fp8 = int(os.environ.get("FLASHRT_NATIVE_ATTN_MAX_FP8", "2"))
 
-    # Packed K-fp8/V-fp4 cache (kv_cache_dtype flashrt_kfp8_vfp4, FLASHRT_KV backend): the layer's cache is
-    # (blocks, kv_heads, block_size, 208) uint8 with a block-segmented record per (block, head):
-    # K e4m3 [bs][128] | V E2M1 codes [bs][64] | V E4M3 scales [bs][8] | pad. Our kernels read it through
-    # three strided views; there is no host decode kernel for it, so every decode batch is ours.
-    def packed_views(self):
-        kv = self.attn.kv_cache
-        if kv.numel() == 0 or kv.dtype != torch.uint8 or kv.shape[-1] != 208:
-            return None
-        blocks, H, bs, _ = kv.shape
-        off = kv.storage_offset()
-        sb, sh = kv.stride(0), kv.stride(1)
-        return (
-            kv.as_strided((blocks, bs, H, 128), (sb, 128, sh, 1), off),
-            kv.as_strided((blocks, bs, H, 64), (sb, 64, sh, 1), off + bs * 128),
-            kv.as_strided((blocks, bs, H, 8), (sb, 8, sh, 1), off + bs * 192),
-        )
-
-    def is_packed(self):
-        return getattr(self.attn, "kv_cache_dtype", "") == "flashrt_kfp8_vfp4"
-
-    def plan(self, k_cache=None, packed=None):
+    def plan(self, k_cache=None):
         md = get_forward_context().attn_metadata
         md = md.get(self.attn.layer_name) if isinstance(md, dict) else md
-        if packed is None:
-            packed = is_packed(
-                self
-            )  # the layer-level chains call plan() without a cache
-        if packed:
-            limit = 1 << 30
-        else:
-            limit = (
-                max_seqs_fp8
-                if (
-                    k_cache is not None
-                    and k_cache.dtype in (torch.uint8, torch.int8, torch.float8_e4m3fn)
-                )
-                else max_seqs
-            )
+        limit = (
+            max_seqs_fp8
+            if k_cache is not None
+            and k_cache.dtype in (torch.uint8, torch.int8, torch.float8_e4m3fn)
+            else max_seqs
+        )
         if (
-            not (
-                isinstance(md, FlashInferMetadata)
-                or (packed and md is not None and hasattr(md, "num_decodes"))
-            )
+            not isinstance(md, FlashInferMetadata)
             or md.num_prefills != 0
-            or not 0 < md.num_decodes <= limit
-            or md.num_decode_tokens != md.num_decodes
-            or md.decode is None
-            or getattr(md.decode, "q_len_per_req", 1) != 1
+            or (not 0 < md.num_decodes <= limit)
+            or (md.num_decode_tokens != md.num_decodes)
+            or (md.decode is None)
+            or (getattr(md.decode, "q_len_per_req", 1) != 1)
         ):
             return None
-        return md.decode, md.num_decodes
+        return (md.decode, md.num_decodes)
 
     fuse_rope = os.environ.get("FLASHRT_NATIVE_ATTN_FUSE", "1") == "1"
 
     def attention_core(self, positions, qkv):
-        packed = is_packed(self)
-        if packed:
-            pv = packed_views(self)
-            k_cache = v_cache = layer_slots = (
-                None  # the FLASHRT_KV backend writes the records on host paths
-            )
-        else:
-            pv = None
-            k_cache, v_cache, layer_slots = self._cache_views()
-        if fuse_rope and (k_cache is not None or pv is not None):
-            p = plan(self, k_cache, packed=pv is not None)
+        k_cache, v_cache, layer_slots = self._cache_views()
+        if fuse_rope and k_cache is not None:
+            p = plan(self, k_cache)
             if p is not None:
                 decode, n = p
                 num_tokens = qkv.shape[0]
@@ -719,70 +586,23 @@ def _install_native_decode_attention(model, api, changes):
                 window = left + 1 if left >= 0 else 0
                 cs = self._cos_sin()
                 mlen = int(getattr(decode, "max_seq_len", 0) or 0)
-                if pv is not None:
-                    kvw, vc, vs = pv
-                    attn_output = api._decode_attention_qkv_v4(
-                        qkv[:n].contiguous(),
-                        positions[:n].contiguous(),
-                        self._native_qw,
-                        self._native_kw,
-                        cs if cs is not None else self._native_qw,
-                        cs is not None,
-                        float(self.q_norm.variance_epsilon),
-                        kvw,
-                        kvw,
-                        decode.block_tables,
-                        decode.seq_lens,
-                        self.softmax_offset,
-                        window,
-                        float(self.head_dim**-0.5),
-                        mlen,
-                        vc,
-                        vs,
-                    )
-                elif v4_shadow is not None and k_cache.dtype in (
-                    torch.uint8,
-                    torch.int8,
-                    torch.float8_e4m3fn,
-                ):
-                    codes, scales = v4_shadow.get(k_cache)
-                    attn_output = api._decode_attention_qkv_v4(
-                        qkv[:n].contiguous(),
-                        positions[:n].contiguous(),
-                        self._native_qw,
-                        self._native_kw,
-                        cs if cs is not None else self._native_qw,
-                        cs is not None,
-                        float(self.q_norm.variance_epsilon),
-                        k_cache,
-                        v_cache,
-                        decode.block_tables,
-                        decode.seq_lens,
-                        self.softmax_offset,
-                        window,
-                        float(self.head_dim**-0.5),
-                        mlen,
-                        codes,
-                        scales,
-                    )
-                else:
-                    attn_output = api._decode_attention_qkv(
-                        qkv[:n].contiguous(),
-                        positions[:n].contiguous(),
-                        self._native_qw,
-                        self._native_kw,
-                        cs if cs is not None else self._native_qw,
-                        cs is not None,
-                        float(self.q_norm.variance_epsilon),
-                        k_cache,
-                        v_cache,
-                        decode.block_tables,
-                        decode.seq_lens,
-                        self.softmax_offset,
-                        window,
-                        float(self.head_dim**-0.5),
-                        mlen,
-                    )
+                attn_output = api._decode_attention_qkv(
+                    qkv[:n].contiguous(),
+                    positions[:n].contiguous(),
+                    self._native_qw,
+                    self._native_kw,
+                    cs if cs is not None else self._native_qw,
+                    cs is not None,
+                    float(self.q_norm.variance_epsilon),
+                    k_cache,
+                    v_cache,
+                    decode.block_tables,
+                    decode.seq_lens,
+                    self.softmax_offset,
+                    window,
+                    float(self.head_dim ** (-0.5)),
+                    mlen,
+                )
                 if n != num_tokens:
                     attn_output = torch.cat(
                         [
@@ -811,124 +631,28 @@ def _install_native_decode_attention(model, api, changes):
             self.head_dim,
         )
         num_tokens = qkv.shape[0]
-        p = (
-            plan(self, k_cache, packed=pv is not None)
-            if (k_cache is not None or pv is not None)
-            else None
-        )
+        p = plan(self, k_cache) if k_cache is not None else None
         if p is not None:
             decode, n = p
             left = self.impl.window_left
             window = left + 1 if left >= 0 else 0
             mlen = int(getattr(decode, "max_seq_len", 0) or 0)
-            if pv is not None:
-                # unfused packed path: the token's record was not written yet (the backend's writer is bypassed)
-                from vllm.v1.attention.backends.flashrt_kv import packed_write
-
-                kvw, vc, vs = pv
-                slots = get_forward_context().slot_mapping
-                slots = (
-                    slots.get(self.attn.layer_name)
-                    if isinstance(slots, dict)
-                    else slots
-                )
-                packed_write(
-                    qkv[:n, self.q_size : self.q_size + self.kv_size],
-                    qkv[:n, self.q_size + self.kv_size :],
-                    slots[:n],
-                    self.attn.kv_cache,
-                    self.num_kv_heads,
-                    int(self.attn.kv_cache.shape[2]),
-                )
-                attn_output = api._decode_attention_v4(
-                    q[:n].contiguous(),
-                    kvw,
-                    kvw,
-                    decode.block_tables,
-                    decode.seq_lens,
-                    self.softmax_offset,
-                    window,
-                    float(self.head_dim**-0.5),
-                    mlen,
-                    vc,
-                    vs,
-                )
-            elif v4_shadow is not None and k_cache.dtype in (
-                torch.uint8,
-                torch.int8,
-                torch.float8_e4m3fn,
-            ):
-                codes, scales = v4_shadow.get(k_cache)
-                attn_output = api._decode_attention_v4(
-                    q[:n].contiguous(),
-                    k_cache,
-                    v_cache,
-                    decode.block_tables,
-                    decode.seq_lens,
-                    self.softmax_offset,
-                    window,
-                    float(self.head_dim**-0.5),
-                    mlen,
-                    codes,
-                    scales,
-                )
-            else:
-                attn_output = api._decode_attention(
-                    q[:n].contiguous(),
-                    k_cache,
-                    v_cache,
-                    decode.block_tables,
-                    decode.seq_lens,
-                    self.softmax_offset,
-                    window,
-                    float(self.head_dim**-0.5),
-                    mlen,
-                )
+            attn_output = api._decode_attention(
+                q[:n].contiguous(),
+                k_cache,
+                v_cache,
+                decode.block_tables,
+                decode.seq_lens,
+                self.softmax_offset,
+                window,
+                float(self.head_dim ** (-0.5)),
+                mlen,
+            )
             if n != num_tokens:
                 attn_output = torch.cat([attn_output, torch.zeros_like(q[n:])], 0)
         else:
             attn_output = torch.empty_like(q)
             _, k, v = qkv.split([self.q_size, self.kv_size, self.kv_size], dim=-1)
-            if _FAKE_ATTN_FP8 and num_tokens >= 64:
-                # study: FP8 (E4M3) prefill attention operands; the cache write already happened.
-                # mode 1: per token-head absmax for q/k/v (optimistic); mode 2: q/k per token-head, v per
-                # (128-token block, head, dim) = what an FP8 PV mma can factor out of the reduction
-                def _fq(t, h):
-                    tf = t.reshape(num_tokens, h, self.head_dim).float()
-                    sc = tf.abs().amax(-1, keepdim=True) / 448.0
-                    sc = torch.where(sc > 0, sc, torch.ones_like(sc))
-                    return (
-                        ((tf / sc).to(torch.float8_e4m3fn).float() * sc)
-                        .reshape(t.shape)
-                        .to(t.dtype)
-                    )
-
-                def _fqv(t, h):
-                    tf = t.reshape(num_tokens, h, self.head_dim).float()
-                    nb = (num_tokens + 127) // 128
-                    pad = nb * 128 - num_tokens
-                    tp = torch.nn.functional.pad(tf, (0, 0, 0, 0, 0, pad)).reshape(
-                        nb, 128, h, self.head_dim
-                    )
-                    sc = tp.abs().amax(1, keepdim=True) / 448.0
-                    sc = torch.where(sc > 0, sc, torch.ones_like(sc))
-                    out = ((tp / sc).to(torch.float8_e4m3fn).float() * sc).reshape(
-                        nb * 128, h, self.head_dim
-                    )[:num_tokens]
-                    return out.reshape(t.shape).to(t.dtype)
-
-                q = _fq(q, self.num_heads)
-                k = _fq(k, self.num_kv_heads)
-                v = (
-                    _fqv(v, self.num_kv_heads)
-                    if _FAKE_ATTN_FP8 >= 2
-                    else _fq(v, self.num_kv_heads)
-                )
-            if _FAKE_ATTN_FP8 == 3 and num_tokens >= 64 and _single_prompt(self):
-                # mode 3: also the probabilities in E4M3 (P * 448, the mma operand of an FP8 PV): torch attention
-                # over the chunk (single-chunk prompts only), replaces the FA2 call
-                _torch_attn_fp8p(self, q, k, v, attn_output, num_tokens)
-                return attn_output
             unified_attention_with_output(
                 q.view(num_tokens, self.num_heads, self.head_dim),
                 k.view(num_tokens, self.num_kv_heads, self.head_dim),
@@ -963,51 +687,6 @@ def _install_native_decode_attention(model, api, changes):
     _LOG.info(
         "Native decode attention attached (paged KV, up to %d sequences)", max_seqs
     )
-
-
-# --- per-32 scale requantization (quality study for the k32 int8 tensor-core path) -----------------------------
-# FLASHRT_NATIVE_PER32 = "" (off) | "dense" (linear projections + LM head) | "all" (also the routed experts).
-# Each pair of adjacent 16-blocks shares the larger E4M3 scale and the codes are re-rounded to E2M1; the result is
-# stored in the per-16 layout (both halves equal), so the existing kernels compute the per-32 model exactly.
-_PER32 = os.environ.get("FLASHRT_NATIVE_PER32", "")
-_E2M1 = [0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0]
-_E2M1_MID = [0.25, 0.75, 1.25, 1.75, 2.5, 3.5, 5.0]
-
-
-def _requant_per32(codes, scales, chunk_rows=2048):
-    dev = codes.device
-    n, kh = codes.shape
-    e4m3 = (
-        torch.arange(256, dtype=torch.uint8, device=dev)
-        .view(torch.float8_e4m3fn)
-        .float()
-    )
-    lut = torch.tensor(_E2M1 + [-v for v in _E2M1], dtype=torch.float32, device=dev)
-    mids = torch.tensor(_E2M1_MID, device=dev)
-    out_codes = torch.empty_like(codes)
-    out_scales = torch.empty_like(scales)
-    for r0 in range(0, n, chunk_rows):
-        c = codes[r0 : r0 + chunk_rows]
-        sc = scales[r0 : r0 + chunk_rows]
-        m = c.shape[0]
-        sv = e4m3[sc.long()]  # [m, k/16]
-        s32 = torch.maximum(sv[:, 0::2], sv[:, 1::2]).repeat_interleave(
-            2, dim=1
-        )  # [m, k/16]
-        vals = torch.stack(
-            [lut[(c & 0xF).long()], lut[(c >> 4).long()]], dim=-1
-        ).reshape(m, kh * 2)
-        r = vals * (sv / s32).repeat_interleave(16, dim=1)
-        del vals
-        mag = torch.bucketize(r.abs(), mids)
-        code = (mag + torch.where(r < 0, 8, 0)).to(torch.uint8).reshape(m, kh, 2)
-        del r, mag
-        out_codes[r0 : r0 + chunk_rows] = code[:, :, 0] | (code[:, :, 1] << 4)
-        sb = sc.view(m, kh * 2 // 32, 2)
-        out_scales[r0 : r0 + chunk_rows] = torch.maximum(
-            sb[:, :, 0], sb[:, :, 1]
-        ).repeat_interleave(2, dim=1)
-    return out_codes, out_scales
 
 
 def _install_native_layer_fusion(model, api, swaps, changes):
@@ -1087,6 +766,7 @@ def register():
     global _INSTALLED, _LOG
     if os.environ.get("FLASHRT_STRUCTURES_NATIVE") != "1" or _INSTALLED:
         return
+    _check_native_options()
     from vllm.logger import init_logger
 
     from .vllm_engine import install_load_hook

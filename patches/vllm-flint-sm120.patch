@@ -1,7 +1,8 @@
 diff --git a/vllm/models/flint/model.py b/vllm/models/flint/model.py
+index c1b1212..d9db5df 100644
 --- a/vllm/models/flint/model.py
 +++ b/vllm/models/flint/model.py
-@@ -316,7 +316,7 @@
+@@ -316,7 +316,7 @@ class FlintAttention(nn.Module):
          impl = self.attn.impl
          assert isinstance(impl, FlashInferImpl), "Flint requires FlashInfer attention"
          assert get_current_vllm_config().model_config.dtype == torch.bfloat16
@@ -11,54 +12,27 @@ diff --git a/vllm/models/flint/model.py b/vllm/models/flint/model.py
          self.impl = impl
          # Flint decode attention and the fused low-latency decode path.
 diff --git a/vllm/models/flint/ops/qk_norm_rope.py b/vllm/models/flint/ops/qk_norm_rope.py
+index 0f02e58..c019630 100644
 --- a/vllm/models/flint/ops/qk_norm_rope.py
 +++ b/vllm/models/flint/ops/qk_norm_rope.py
-@@ -18,6 +18,11 @@
+@@ -18,6 +18,8 @@ _BLOCK_T = 16
  
  # A fixed token tile and no integer specialization: one compiled variant per
  # (RoPE, PDL) pair, all of which CUDA graph capture and warmup reach.
-+import os as _os
-+_FAKE_NVFP4_MODE = _os.environ.get("FLASHRT_KV_FAKE_NVFP4", "0")  # "1"/"kv": K and V, "k": keys only, "v": values only
-+_FAKE_NVFP4 = _FAKE_NVFP4_MODE in ("1", "kv", "k", "v")
 +
 +
  @triton.jit(do_not_specialize=["num_tokens", "num_slots"])
  def _qk_norm_rope_cache_kernel(
      qkv_ptr,
-@@ -44,6 +49,10 @@
+@@ -44,6 +46,7 @@ def _qk_norm_rope_cache_kernel(
      APPLY_ROPE: tl.constexpr,
      BLOCK_T: tl.constexpr,
      LAUNCH_DEPENDENTS: tl.constexpr,
 +    CACHE_FP8: tl.constexpr,
-+    FAKE_NVFP4: tl.constexpr,
-+    FAKE_K: tl.constexpr,
-+    FAKE_V: tl.constexpr,
  ):
      if LAUNCH_DEPENDENTS:
          # The PDL successor waits on this grid before reading q / K / V.
-@@ -79,6 +88,21 @@
-         n2 = r2
-     o1 = tl.where(is_v, x1, n1).to(tl.bfloat16)
-     o2 = tl.where(is_v, x2, n2).to(tl.bfloat16)
-+    if FAKE_NVFP4:
-+        # quality probe for an NVFP4 KV cache: K/V rounded to E2M1 with one E4M3 scale per 16 dims, stored as bf16
-+        f1 = tl.reshape(o1.to(tl.float32), (BLOCK_T, half // 16, 16))
-+        f2 = tl.reshape(o2.to(tl.float32), (BLOCK_T, half // 16, 16))
-+        s1 = (tl.max(tl.abs(f1), axis=2) / 6.0).to(tl.float8e4nv).to(tl.float32)[:, :, None]
-+        s2 = (tl.max(tl.abs(f2), axis=2) / 6.0).to(tl.float8e4nv).to(tl.float32)[:, :, None]
-+        q1 = tl.abs(f1) / tl.where(s1 > 0, s1, 1.0)
-+        q2 = tl.abs(f2) / tl.where(s2 > 0, s2, 1.0)
-+        l1 = tl.where(q1 < 0.25, 0.0, tl.where(q1 < 0.75, 0.5, tl.where(q1 < 1.25, 1.0, tl.where(q1 < 1.75, 1.5, tl.where(q1 < 2.5, 2.0, tl.where(q1 < 3.5, 3.0, tl.where(q1 < 5.0, 4.0, 6.0)))))))
-+        l2 = tl.where(q2 < 0.25, 0.0, tl.where(q2 < 0.75, 0.5, tl.where(q2 < 1.25, 1.0, tl.where(q2 < 1.75, 1.5, tl.where(q2 < 2.5, 2.0, tl.where(q2 < 3.5, 3.0, tl.where(q2 < 5.0, 4.0, 6.0)))))))
-+        d1 = tl.reshape(tl.where(f1 < 0, -l1, l1) * s1, (BLOCK_T, half)).to(tl.bfloat16)
-+        d2 = tl.reshape(tl.where(f2 < 0, -l2, l2) * s2, (BLOCK_T, half)).to(tl.bfloat16)
-+        kv = (is_k & FAKE_K) | (is_v & FAKE_V)
-+        o1 = tl.where(kv, d1, o1)
-+        o2 = tl.where(kv, d2, o2)
- 
-     out = q_out_ptr + (tok64 * NUM_Q_HEADS + head) * HEAD_DIM
-     tl.store(out + offs, o1, mask=t_mask & is_q)
-@@ -97,10 +121,19 @@
+@@ -97,10 +100,19 @@ def _qk_norm_rope_cache_kernel(
      )
      k_mask = (slot >= 0) & is_k
      v_mask = (slot >= 0) & is_v
@@ -82,21 +56,19 @@ diff --git a/vllm/models/flint/ops/qk_norm_rope.py b/vllm/models/flint/ops/qk_no
  
  
  def qk_norm_rope_cache(
-@@ -182,6 +215,10 @@
+@@ -182,6 +194,7 @@ def qk_norm_rope_cache(
          APPLY_ROPE=cos_sin_cache is not None,
          BLOCK_T=_BLOCK_T,
          LAUNCH_DEPENDENTS=launch_dependents,
 +        CACHE_FP8=(k_cache.dtype in (torch.uint8, torch.int8, torch.float8_e4m3fn)) and k_cache is not qkv,
-+        FAKE_NVFP4=_FAKE_NVFP4 and k_cache is not qkv,
-+        FAKE_K=_FAKE_NVFP4_MODE in ("1", "kv", "k"),
-+        FAKE_V=_FAKE_NVFP4_MODE in ("1", "kv", "v"),
          num_warps=4,
      )
      return q
 diff --git a/vllm/v1/attention/backends/flashinfer.py b/vllm/v1/attention/backends/flashinfer.py
+index bb9e1b0..fc93990 100644
 --- a/vllm/v1/attention/backends/flashinfer.py
 +++ b/vllm/v1/attention/backends/flashinfer.py
-@@ -8,6 +8,7 @@
+@@ -8,6 +8,7 @@ from functools import partial
  from typing import ClassVar
  
  import numpy as np
@@ -104,7 +76,7 @@ diff --git a/vllm/v1/attention/backends/flashinfer.py b/vllm/v1/attention/backen
  import torch
  from flashinfer import (
      BatchAttentionWithAttentionSinkWrapper,
-@@ -137,6 +138,17 @@
+@@ -137,6 +138,17 @@ def _nvfp4_kv_views(
      return (k_data, v_data), (k_scale, v_scale), "HND" if hnd else "NHD"
  
  
@@ -122,12 +94,10 @@ diff --git a/vllm/v1/attention/backends/flashinfer.py b/vllm/v1/attention/backen
  def _get_trtllm_workspace_buffer():
      global trtllm_workspace_buffer
      if trtllm_workspace_buffer is None:
-@@ -170,6 +182,35 @@
-     kv_idx = torch.arange(padded, device=device).unsqueeze(0)
-     bool_mask = kv_idx <= q_idx if causal else (kv_idx < q_len).expand(q_len, padded)
+@@ -172,6 +184,35 @@ def _make_xqa_draft_block_mask(
      return _pack_draft_block_bool_mask(bool_mask, num_packed)
-+
-+
+ 
+ 
 +_SAGE_PREFILL = os.environ.get("FLASHRT_SAGE_PREFILL", "0") == "1"
 +
 +
@@ -155,10 +125,12 @@ diff --git a/vllm/v1/attention/backends/flashinfer.py b/vllm/v1/attention/backen
 +        k = gather_pages_bf16(k_cache, btr, L, hnd, ks, H, D); v = gather_pages_bf16(v_cache, btr, L, hnd, vs, H, D)
 +        q = prefill_query[qs:qe].reshape(qe - qs, impl.num_heads, D)
 +        out_prefill[qs:qe].copy_(attention_fp8(q, k, v, impl.sinks, impl.scale).reshape(qe - qs, -1).view_as(out_prefill[qs:qe]))
- 
- 
++
++
  def _make_xqa_ragged_draft_block_mask(
-@@ -826,6 +867,11 @@
+     q_lens: list[int], max_q_len: int, causal: bool, device: torch.device
+ ) -> torch.Tensor:
+@@ -826,6 +867,11 @@ class FlashInferMetadata:
      Holds the metadata for the decode portion of the batch.
      Will be `None` if `num_decode_tokens == 0`.
      """
@@ -170,7 +142,7 @@ diff --git a/vllm/v1/attention/backends/flashinfer.py b/vllm/v1/attention/backen
  
  
  class FlashInferMetadataBuilder(AttentionMetadataBuilder[FlashInferMetadata]):
-@@ -1340,6 +1386,9 @@
+@@ -1340,6 +1386,9 @@ class FlashInferMetadataBuilder(AttentionMetadataBuilder[FlashInferMetadata]):
              ragged_q_lens, q_len_per_req, causal, self.device
          )
  
@@ -180,7 +152,7 @@ diff --git a/vllm/v1/attention/backends/flashinfer.py b/vllm/v1/attention/backen
      def _get_prefill_wrapper(
          self,
          causal: bool = True,
-@@ -1393,7 +1442,7 @@
+@@ -1393,7 +1442,7 @@ class FlashInferMetadataBuilder(AttentionMetadataBuilder[FlashInferMetadata]):
                  if self.has_sinks and (
                      current_platform.is_device_capability(90)
                      or current_platform.is_device_capability_family(120)
@@ -189,7 +161,7 @@ diff --git a/vllm/v1/attention/backends/flashinfer.py b/vllm/v1/attention/backen
                      assert not self.is_kvcache_nvfp4
                      self._prefill_wrapper = BatchAttentionWithAttentionSinkWrapper(
                          self._get_workspace_buffer(),
-@@ -1837,6 +1886,10 @@
+@@ -1837,6 +1886,10 @@ class FlashInferMetadataBuilder(AttentionMetadataBuilder[FlashInferMetadata]):
                          disable_split_kv=self.disable_split_kv,
                      )
                  attn_metadata.prefill = FIPrefill(wrapper=prefill_wrapper)
@@ -200,7 +172,7 @@ diff --git a/vllm/v1/attention/backends/flashinfer.py b/vllm/v1/attention/backen
  
          ## DECODE PATHWAY
          if num_decodes > 0:
-@@ -2370,6 +2423,25 @@
+@@ -2370,6 +2423,25 @@ class FlashInferImpl(AttentionImpl):
                              v_scale=layer._v_scale_float,
                              out=out_prefill,
                          )
