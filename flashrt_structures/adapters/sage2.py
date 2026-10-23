@@ -12,6 +12,8 @@ import os
 from pathlib import Path
 
 import torch
+import triton
+import triton.language as tl
 
 _OPS = None
 _NS = "flashrt_sage2_blackwell"
@@ -74,4 +76,30 @@ def attention_fp8(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, sinks: torc
         # the kernel stores log2(sum exp) minus S_FP8_OFFSET (8.807 = log2 448, the FP8 probability scale)
         f = torch.sigmoid((lse[0].transpose(0, 1) + _S_FP8_OFFSET) * _LN2 - sinks[None, :].float())   # [Tq, Hq]
         out = (out.float() * f[:, :, None]).to(out.dtype)
+    return out
+
+
+@triton.jit
+def _gather_pages_kernel(cache_ptr, bt_ptr, out_ptr, L, s_blk, s_tok, s_head, page, scale, H: tl.constexpr,
+                         D: tl.constexpr, BLOCK_T: tl.constexpr):
+    # fp8 (E4M3 bytes) paged K or V [blocks][...] -> bf16 rows [L, H, D] for tokens 0..L-1 of one sequence
+    t = tl.program_id(0) * BLOCK_T + tl.arange(0, BLOCK_T)
+    m = t < L
+    blk = tl.load(bt_ptr + t // page, mask=m, other=0).to(tl.int64)
+    tok = (t % page).to(tl.int64)
+    d = tl.arange(0, D)
+    for h in tl.static_range(H):
+        src = cache_ptr + blk[:, None] * s_blk + tok[:, None] * s_tok + h * s_head + d[None, :]
+        v = tl.load(src, mask=m[:, None], other=0).to(tl.float8e4nv, bitcast=True).to(tl.float32) * scale
+        tl.store(out_ptr + (t.to(tl.int64)[:, None] * H + h) * D + d[None, :], v.to(tl.bfloat16), mask=m[:, None])
+
+
+def gather_pages_bf16(cache: torch.Tensor, block_table: torch.Tensor, L: int, hnd: bool, scale: float, H: int, D: int) -> torch.Tensor:
+    """One pass: fp8 pages (uint8 or float8 view; (blocks, H, page, D) if hnd else (blocks, page, H, D)) -> bf16 [L, H, D]."""
+    c = cache if cache.dtype == torch.uint8 else cache.view(torch.uint8)
+    page = c.shape[2] if hnd else c.shape[1]
+    s_blk = c.stride(0); s_head = c.stride(1) if hnd else c.stride(2); s_tok = c.stride(2) if hnd else c.stride(1)
+    out = torch.empty((L, H, D), dtype=torch.bfloat16, device=c.device)
+    _gather_pages_kernel[(triton.cdiv(L, 64),)](c, block_table, out, L, s_blk, s_tok, s_head, page, float(scale),
+                                                H=H, D=D, BLOCK_T=64, num_warps=4)
     return out
